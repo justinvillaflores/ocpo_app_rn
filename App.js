@@ -10,9 +10,11 @@ import {
   StyleSheet,
   Image,
   Linking,
+  TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const Tab = createBottomTabNavigator();
 
@@ -54,12 +56,11 @@ function HomeScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', paddingTop: 135, paddingHorizontal: 20 }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', paddingTop: 100, paddingHorizontal: 20 }}>
         <Image source={require('./assets/download.png')} style={{ width: 400, height: 400, marginBottom: -50, marginTop: -120 }} />
         <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>Welcome to Olongapo City Hotlines</Text>
         <Text style={{ fontSize: 15, fontWeight: 'bold', marginBottom: 10 }}>Call us now for emergencies:</Text>
 
-        {/* 911 left, OCPO centered */}
         <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between' }}>
           {renderContact(contacts[0], 0)}
           <View style={{ flex: 1 }} />
@@ -93,6 +94,31 @@ function HomeScreen() {
 }
 
 function ServicesScreen() {
+  const [rating, setRating] = useState('');
+  const [comment, setComment] = useState('');
+  const [modalVisible, setModalVisible] = useState(false);
+
+  const submitFeedback = async () => {
+    const feedback = { rating, comment, date: new Date().toISOString() };
+    let stored = await AsyncStorage.getItem('feedbacks');
+    const feedbacks = stored ? JSON.parse(stored) : [];
+    feedbacks.push(feedback);
+    await AsyncStorage.setItem('feedbacks', JSON.stringify(feedbacks));
+
+    if (navigator.onLine) {
+      await fetch('https://yourdomain.com/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(feedback),
+      });
+    }
+
+    setRating('');
+    setComment('');
+    setModalVisible(false);
+    alert('Thank you for your feedback boss!');
+  };
+
   const stations = [
     { name: 'Police Station 1', image: require('./assets/1.png'), link: 'https://www.facebook.com/share/173Vcn7enb/' },
     { name: 'Police Station 2', image: require('./assets/2.png'), link: 'https://www.facebook.com/share/16aC2ceuto/' },
@@ -121,19 +147,17 @@ function ServicesScreen() {
           onPress={() => Linking.openURL(item.link)}
           style={{ alignItems: 'center', flex: 1 }}
         >
-          {item.image && (
-            <Image
-              source={item.image}
-              style={{
-                width: 70,
-                height: 70,
-                marginBottom: 5,
-                borderWidth: 1,
-                borderColor: '#000',
-                borderRadius: 10,
-              }}
-            />
-          )}
+          <Image
+            source={item.image}
+            style={{
+              width: 70,
+              height: 70,
+              marginBottom: 5,
+              borderWidth: 1,
+              borderColor: '#000',
+              borderRadius: 10,
+            }}
+          />
           <Text style={{ fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>{item.name}</Text>
         </TouchableOpacity>
       ))}
@@ -142,18 +166,128 @@ function ServicesScreen() {
   );
 
   return (
-    <ScrollView style={{ flex: 1, paddingHorizontal: 20, paddingTop: 20 }} contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}>
-      <Image source={require('./assets/services img.png')} style={{ width: '100%', height: 180, borderRadius: 20, resizeMode: 'cover', marginBottom: 30 }} />
+    <ScrollView
+      style={{ flex: 1, paddingHorizontal: 20, paddingTop: 20 }}
+      contentContainerStyle={{ paddingBottom: 50, flexGrow: 1 }}
+    >
+      <View
+        style={{
+          width: '100%',
+          height: 180,
+          borderRadius:10,
+          overflow: 'hidden',
+          marginBottom: 5,
+        }}
+      >
+        <Image
+          source={require('./assets/OC SERVICES.png')}
+          style={{
+            width: '100%',
+            height: '100%',
+            resizeMode: 'contain',
+          }}
+        />
+      </View>
+
+
       <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Report</Text>
       {renderRow(reportItems)}
+
       <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Services</Text>
       {renderRow(services)}
+
       <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 20 }}>Pages</Text>
       {renderRow(stations.slice(0, 3))}
       {renderRow(stations.slice(3, 6))}
+
+      <TouchableOpacity
+        onPress={() => setModalVisible(true)}
+        style={{
+          backgroundColor: '#0d6efd',
+          paddingVertical: 10,
+          borderRadius: 8,
+          marginTop: 70,
+          alignItems: 'center',
+        }}
+      >
+        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Give Feedback</Text>
+      </TouchableOpacity>
+
+      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+        <View style={serviceStyles.modalOverlay}>
+          <View style={serviceStyles.feedbackModal}>
+            <ScrollView contentContainerStyle={{ padding: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 15 }}>Submit Feedback</Text>
+
+              <Text style={{ fontSize: 14 }}>Rate the App (1 to 5):</Text>
+              <TextInput
+                value={rating}
+                onChangeText={setRating}
+                keyboardType="numeric"
+                style={serviceStyles.input}
+              />
+
+              <Text style={{ fontSize: 14, marginTop: 15 }}>Your Suggestion:</Text>
+              <TextInput
+                value={comment}
+                onChangeText={setComment}
+                multiline
+                style={[serviceStyles.input, { height: 100, textAlignVertical: 'top' }]}
+              />
+
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
+                <TouchableOpacity
+                  onPress={() => setModalVisible(false)}
+                  style={[serviceStyles.button, { backgroundColor: 'gray' }]}
+                >
+                  <Text style={serviceStyles.buttonText}>Cancel</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={submitFeedback}
+                  style={[serviceStyles.button, { backgroundColor: '#0d6efd' }]}
+                >
+                  <Text style={serviceStyles.buttonText}>Submit</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
+
+const serviceStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  feedbackModal: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    width: '90%',
+    maxHeight: '80%',
+  },
+  input: {
+    borderColor: 'gray',
+    borderWidth: 1,
+    padding: 10,
+    marginTop: 5,
+    borderRadius: 6,
+  },
+  button: {
+    paddingHorizontal: 25,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+});
 
 function DirectoryScreen() {
   const barangayLogo = require('./assets/brgy.png');
