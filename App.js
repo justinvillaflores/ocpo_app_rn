@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import QRCode from 'react-native-qrcode-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import CustomTabBar from './CustomTabBar';
 
 const Tab = createBottomTabNavigator();
 
@@ -77,13 +78,13 @@ function HomeScreen() {
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 10 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 2 }}>
           {renderContact(contacts[1], 1)}
           {renderContact(contacts[2], 2)}
           {renderContact(contacts[3], 3)}
         </View>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 20 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 5 }}>
           {renderContact(contacts[4], 4)}
           {renderContact(contacts[5], 5)}
           {renderContact(contacts[6], 6)}
@@ -99,24 +100,36 @@ function ServicesScreen() {
   const [modalVisible, setModalVisible] = useState(false);
 
   const submitFeedback = async () => {
-    const feedback = { rating, comment, date: new Date().toISOString() };
-    let stored = await AsyncStorage.getItem('feedbacks');
-    const feedbacks = stored ? JSON.parse(stored) : [];
-    feedbacks.push(feedback);
-    await AsyncStorage.setItem('feedbacks', JSON.stringify(feedbacks));
+    const ratingNumber = parseInt(rating);
 
-    if (navigator.onLine) {
-      await fetch('https://yourdomain.com/api/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(feedback),
-      });
+    if (isNaN(ratingNumber) || ratingNumber < 1 || ratingNumber > 5) {
+      alert('Please enter a valid rating between 1 and 5.');
+      return;
     }
 
-    setRating('');
-    setComment('');
-    setModalVisible(false);
-    alert('Thank you for your feedback boss!');
+    if (!comment.trim()) {
+      alert('Please enter your comment or suggestion.');
+      return;
+    }
+
+    try {
+      const formData = new FormData();
+      formData.append('entry.1309731542', rating);
+      formData.append('entry.17557046', comment);
+
+      await fetch('https://docs.google.com/forms/d/e/1FAIpQLSdoJqDVaQNQxx_L4dl4cTFNB2tLWA2L2oNpI7s5yLR5sDJ4Fw/formResponse', {
+        method: 'POST',
+        body: formData,
+      });
+
+      setRating('');
+      setComment('');
+      setModalVisible(false);
+      alert('Thank you for your feedback!');
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      alert('Something went wrong. Please try again later.');
+    }
   };
 
   const stations = [
@@ -170,25 +183,12 @@ function ServicesScreen() {
       style={{ flex: 1, paddingHorizontal: 20, paddingTop: 20 }}
       contentContainerStyle={{ paddingBottom: 50, flexGrow: 1 }}
     >
-      <View
-        style={{
-          width: '100%',
-          height: 180,
-          borderRadius:10,
-          overflow: 'hidden',
-          marginBottom: 5,
-        }}
-      >
+      <View style={{ width: '100%', height: 180, borderRadius: 10, overflow: 'hidden', marginBottom: 5 }}>
         <Image
           source={require('./assets/OC SERVICES.png')}
-          style={{
-            width: '100%',
-            height: '100%',
-            resizeMode: 'contain',
-          }}
+          style={{ width: '100%', height: '100%', resizeMode: 'contain' }}
         />
       </View>
-
 
       <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Report</Text>
       {renderRow(reportItems)}
@@ -290,52 +290,104 @@ const serviceStyles = StyleSheet.create({
 });
 
 function DirectoryScreen() {
-  const barangayLogo = require('./assets/brgy.png');
-  const bfpLogo = require('./assets/BFP.png');
+  const fixedServiceLeft = { name: 'OTPMS', number: '09289178420', logo: require('./assets/otmps.png') };
+  const fixedServiceCenter = { name: 'Subic Water', number: '09701079495', logo: require('./assets/subicwater.png') };
 
-  const stations = [
-    {
-      id: 1,
-      name: 'Police Station 1',
-      barangays: [
-        { name: 'Barangay 132', number: '091234' },
-        { name: 'Barangay 444', number: '09321' },
-        { name: 'Barangay 000', number: '094231' },
-      ],
-    },
-    { id: 2, name: 'Police Station 2', barangays: [] },
-    { id: 3, name: 'Police Station 3', barangays: [] },
-    { id: 4, name: 'Police Station 4', barangays: [] },
-    { id: 5, name: 'Police Station 5', barangays: [] },
-    { id: 6, name: 'Police Station 6', barangays: [] },
+  const otherServices = [
+    { name: 'BFP', number: '09512779025', logo: require('./assets/BFP.png') },
+    { name: 'CDRRMO', number: '09985937446', logo: require('./assets/cdrrmo.png') },
+    { name: 'OEDC', number: '09989763369', logo: require('./assets/oedc.png') },
   ];
+
+  const sortedServices = otherServices.sort((a, b) => a.name.localeCompare(b.name));
+
+  const bottomBarangays = [
+    { name: 'West Bajac-bajac', number: '12333', logo: require('./assets/wbb.png') },
+    { name: 'West Tapinac', number: '09999911249', logo: require('./assets/westTapinac.png') },
+  ];
+
+  const otherBarangays = [
+    { name: 'Barretto', number: '09389495840', logo: require('./assets/barretto.png') },
+    { name: 'East Bajac-bajac', number: '09472171542', logo: require('./assets/ebb.png') },
+    { name: 'East Tapinac', number: '09985604325', logo: require('./assets/eastTapinac.png') },
+    { name: 'Gordon Heights', number: '123', logo: require('./assets/GH.png') },
+    { name: 'Kalaklan (Rescue)', number: '09671255737', logo: require('./assets/kalaklan.png') },
+    { name: 'Mabayuan', number: '123', logo: require('./assets/mabayuan.png') },
+    { name: 'New Asinan', number: '09628651046', logo: require('./assets/newAsinan.png') },
+    { name: 'New Banicain', number: '09086864304', logo: require('./assets/newBanicain.png') },
+    { name: 'New Cabalan', number: '09104845635', logo: require('./assets/newcab.png') },
+    { name: 'New Ilalim', number: '123', logo: require('./assets/newIlalim.png') },
+    { name: 'New Kalalake', number: '099457500537', logo: require('./assets/newKalalake.png') },
+    { name: 'New Kababae', number: '09671924651', logo: require('./assets/newKababae.png') },
+    { name: 'Old Cabalan', number: '09484745635', logo: require('./assets/oldcab.png') },
+    { name: 'Pag-Asa', number: '09705730136', logo: require('./assets/pagasa.png') },
+    { name: 'Sta Rita', number: '123', logo: require('./assets/starita.png') },
+  ];
+
+  const sortedOthers = otherBarangays.sort((a, b) => a.name.localeCompare(b.name));
+
+  const renderItem = (item, index) => (
+    <TouchableOpacity
+      key={index}
+      onPress={() => Linking.openURL(`tel:${item.number}`)}
+      style={{ width: '30%', alignItems: 'center', marginBottom: 20 }}
+    >
+      <Image
+        source={item.logo}
+        style={{
+          width: 60,
+          height: 60,
+          borderWidth: 1,
+          borderColor: '#000',
+          borderRadius: 10,
+          resizeMode: 'contain',
+        }}
+      />
+      <Text
+        style={{
+          fontSize: item.name.length > 15 ? 10 : 12,
+          fontWeight: 'bold',
+          textAlign: 'center',
+          marginTop: 5,
+        }}
+      >
+        {item.name}
+      </Text>
+    </TouchableOpacity>
+  );
 
   return (
     <ScrollView style={{ flex: 1, padding: 20 }}>
-      <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 25, marginTop: 10 }}>Contacts</Text>
+      <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 15, marginTop: 10 }}>Contacts</Text>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 30 }}>
-        <TouchableOpacity onPress={() => Linking.openURL('tel:09512779025')} style={{ alignItems: 'center' }}>
-          <Image source={bfpLogo} style={{ width: 60, height: 60, marginLeft: 20, marginRight: 10, borderWidth: 1, borderColor: '#000', borderRadius: 10 }} />
-          <Text style={{ fontSize: 12, fontWeight: 'bold', color: '#000', marginTop: 5 }}>BFP</Text>
-        </TouchableOpacity>
+      <View style={{ marginBottom: 30 }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#000', marginBottom: 10 }}>Services:</Text>
+
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          {sortedServices.map((service, index) => renderItem(service, index))}
+        </View>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
+          {renderItem(fixedServiceLeft, 'otpms')}
+          {renderItem(fixedServiceCenter, 'subic')}
+          <View style={{ width: '30%' }} />
+        </View>
       </View>
 
-      {stations.map((station) => (
-        <View key={station.id} style={{ marginBottom: 30 }}>
-          <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#000', marginBottom: 10 }}>{station.name}:</Text>
-          {station.barangays.length > 0 && (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-              {station.barangays.map((brgy, index) => (
-                <TouchableOpacity key={index} onPress={() => Linking.openURL(`tel:${brgy.number}`)} style={{ width: '30%', alignItems: 'center', marginBottom: 20 }}>
-                  <Image source={barangayLogo} style={{ width: 60, height: 60, borderWidth: 1, borderColor: '#000', borderRadius: 10 }} />
-                  <Text style={{ fontSize: 12, fontWeight: 'bold', textAlign: 'center', marginTop: 5 }}>{brgy.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+      <View style={{ marginBottom: 30 }}>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#000', marginTop: -30, marginBottom: 10 }}>
+          Barangay's:
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          {sortedOthers.map((brgy, index) => renderItem(brgy, index + 100))}
         </View>
-      ))}
+
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
+          {renderItem(bottomBarangays[0], 'wbb')}
+          {renderItem(bottomBarangays[1], 'wt')}
+          <View style={{ width: '30%' }} />
+        </View>
+      </View>
     </ScrollView>
   );
 }
@@ -415,17 +467,8 @@ export default function App() {
       {!showNotice && (
         <NavigationContainer>
           <Tab.Navigator
-            screenOptions={({ route }) => ({
-              headerShown: false,
-              tabBarIcon: ({ color, size }) => {
-                let iconName;
-                if (route.name === 'Home') iconName = 'home';
-                else if (route.name === 'Services') iconName = 'document-text';
-                else if (route.name === 'Directory') iconName = 'call';
-                else if (route.name === 'QR Code') iconName = 'qr-code';
-                return <Ionicons name={iconName} size={size} color={color} />;
-              },
-            })}
+            screenOptions={{ headerShown: false }}
+            tabBar={(props) => <CustomTabBar {...props} />}
           >
             <Tab.Screen name="Home" component={HomeScreen} />
             <Tab.Screen name="Services" component={ServicesScreen} />
@@ -434,6 +477,7 @@ export default function App() {
           </Tab.Navigator>
         </NavigationContainer>
       )}
+
     </>
   );
 }
