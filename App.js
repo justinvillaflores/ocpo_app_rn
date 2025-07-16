@@ -133,12 +133,12 @@ function ServicesScreen() {
   };
 
   const stations = [
-    { name: 'Police Station 1', image: require('./assets/1.png'), link: 'https://www.facebook.com/share/173Vcn7enb/' },
-    { name: 'Police Station 2', image: require('./assets/2.png'), link: 'https://www.facebook.com/share/16aC2ceuto/' },
-    { name: 'Police Station 3', image: require('./assets/3.png'), link: 'https://www.facebook.com/share/1Aizuy6hcu/' },
-    { name: 'Police Station 4', image: require('./assets/4.png'), link: 'https://www.facebook.com/share/1HxyfdxCjc/' },
-    { name: 'Police Station 5', image: require('./assets/5.png'), link: 'https://www.facebook.com/share/16b9pj5FXS/' },
-    { name: 'Police Station 6', image: require('./assets/6.png'), link: 'https://www.facebook.com/share/16ZZr1bi7s/' },
+    { name: 'Police Station 1', image: require('./assets/uno.png'), link: 'https://www.facebook.com/share/173Vcn7enb/' },
+    { name: 'Police Station 2', image: require('./assets/dos.png'), link: 'https://www.facebook.com/share/16aC2ceuto/' },
+    { name: 'Police Station 3', image: require('./assets/tres.png'), link: 'https://www.facebook.com/share/1Aizuy6hcu/' },
+    { name: 'Police Station 4', image: require('./assets/kwatro.png'), link: 'https://www.facebook.com/share/1HxyfdxCjc/' },
+    { name: 'Police Station 5', image: require('./assets/singko.png'), link: 'https://www.facebook.com/share/16b9pj5FXS/' },
+    { name: 'Police Station 6', image: require('./assets/sais.png'), link: 'https://www.facebook.com/share/16ZZr1bi7s/' },
   ];
 
   const services = [
@@ -390,12 +390,18 @@ function DirectoryScreen() {
 
 function QRScreen() {
   return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-      <Text style={{ marginBottom: 20 }}>Scan to Download this App</Text>
-      <QRCode
-        value="https://expo.dev/accounts/justinvillaflores/projects/ocpo_app_rn/builds/d2b78779-8ad8-4d0a-bc76-e1fd6b4b69cb"
-        size={200}
-      />
+    <View style={styles.container}>
+      <View style={styles.qrCard}>
+        <QRCode
+          value="https://expo.dev/accounts/justinvillaflores/projects/ocpo_app_rn/builds/d2b78779-8ad8-4d0a-bc76-e1fd6b4b69cb"
+          size={200}
+          color="#0d6efd"
+        />
+      </View>
+
+      <TouchableOpacity style={styles.scanButton}>
+        <Text style={styles.scanButtonText}>SCAN QR CODE</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -479,6 +485,35 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  container: {
+      flex: 1,
+      backgroundColor: '#fff',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    qrCard: {
+      backgroundColor: '#fff',
+      padding: 20,
+      borderRadius: 12,
+      elevation: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.2,
+      shadowRadius: 5,
+    },
+    scanButton: {
+      marginTop: 30,
+      backgroundColor: '#d4f0f7',
+      paddingVertical: 10,
+      paddingHorizontal: 30,
+      borderRadius: 6,
+    },
+    scanButtonText: {
+      color: '#0d6efd',
+      fontWeight: 'bold',
+      fontSize: 14,
+    },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.4)',
