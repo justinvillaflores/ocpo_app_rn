@@ -42,7 +42,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
               >
                 <Ionicons
                   name={iconName}
-                  size={24}
+                  size={26}
                   color={isFocused ? '#0d6efd' : '#ccc'}
                 />
               </View>
@@ -50,7 +50,9 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
                 style={{
                   color: isFocused ? '#0d6efd' : '#ccc',
                   fontSize: 12,
-                  marginTop: 3,
+                  fontWeight: '600',
+                  marginTop: -2,
+                  marginBottom: 10,
                 }}
               >
                 {label}
@@ -66,7 +68,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
-    height: 70,
+    height: 85,
     backgroundColor: '#fff',
     borderTopLeftRadius: 25,
     borderTopRightRadius: 25,
@@ -77,6 +79,7 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     justifyContent: 'space-around',
     alignItems: 'center',
+    paddingBottom: 10,
   },
   tab: {
     flex: 1,
@@ -84,6 +87,7 @@ const styles = StyleSheet.create({
   },
   iconWrapper: {
     alignItems: 'center',
+    justifyContent: 'center',
   },
   iconCircle: {
     width: 50,
@@ -92,14 +96,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#fff',
-    overflow: 'hidden',
   },
   activeIconCircle: {
-    marginTop: -25,
+    marginTop: -20,
     elevation: 10,
     shadowColor: '#0d6efd',
     shadowOpacity: 0.3,
     shadowOffset: { width: 0, height: 4 },
     shadowRadius: 5,
+    marginBottom: 4,
   },
 });

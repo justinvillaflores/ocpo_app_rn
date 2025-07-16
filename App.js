@@ -185,8 +185,8 @@ function ServicesScreen() {
     >
       <View style={{ width: '100%', height: 180, borderRadius: 10, overflow: 'hidden', marginBottom: 5 }}>
         <Image
-          source={require('./assets/OC SERVICES.png')}
-          style={{ width: '100%', height: '100%', resizeMode: 'contain' }}
+          source={require('./assets/services.png')}
+          style={{ width: '105%', height: '105%', resizeMode: 'contain' }}
         />
       </View>
 
@@ -301,19 +301,14 @@ function DirectoryScreen() {
 
   const sortedServices = otherServices.sort((a, b) => a.name.localeCompare(b.name));
 
-  const bottomBarangays = [
-    { name: 'West Bajac-bajac', number: '09485075752', logo: require('./assets/wbb.png') },
-    { name: 'West Tapinac', number: '09999911249', logo: require('./assets/westTapinac.png') },
-  ];
-
   const otherBarangays = [
     { name: 'Barretto', number: '09389495840', logo: require('./assets/barretto.png') },
     { name: 'East Bajac-bajac', number: '09472171542', logo: require('./assets/ebb.png') },
     { name: 'East Tapinac', number: '09985604325', logo: require('./assets/eastTapinac.png') },
     { name: 'Gordon Heights\n(Globe)', number: '09664632688', logo: require('./assets/GH.png') },
     { name: 'Gordon Heights\n(Smart)', number: '09208278618', logo: require('./assets/GH.png') },
-    { name: 'GH-Rescue\n(Globe)', number: '09208278618', logo: require('./assets/GH.png') },
-    { name: 'GH-Rescue\n(Smart)', number: '09208278618', logo: require('./assets/GH.png') },
+    { name: 'GH-Rescue\n(Globe)', number: '09173065966', logo: require('./assets/GH.png') },
+    { name: 'GH-Rescue\n(Smart)', number: '09985937446', logo: require('./assets/GH.png') },
     { name: 'Kalaklan\n(Rescue)', number: '09671255737', logo: require('./assets/kalaklan.png') },
     { name: 'Mabayuan\n(BPAT)', number: '09605826032', logo: require('./assets/mabayuan.png') },
     { name: 'Mabayuan\n(Rescue)', number: '09190031577', logo: require('./assets/mabayuan.png') },
@@ -327,6 +322,8 @@ function DirectoryScreen() {
     { name: 'Pag-Asa', number: '09705730136', logo: require('./assets/pagasa.png') },
     { name: 'Sta Rita\n(BPAT)', number: '09816022965', logo: require('./assets/starita.png') },
     { name: 'Sta Rita\n(Rescue)', number: '09318330840', logo: require('./assets/starita.png') },
+    { name: 'West Bajac-bajac', number: '09485075752', logo: require('./assets/wbb.png') },
+    { name: 'West Tapinac', number: '09999911249', logo: require('./assets/westTapinac.png') },
   ];
 
   const sortedOthers = otherBarangays.sort((a, b) => a.name.localeCompare(b.name));
@@ -366,7 +363,7 @@ function DirectoryScreen() {
       <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 15, marginTop: 10 }}>Contacts</Text>
 
       <View style={{ marginBottom: 30 }}>
-        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#000', marginBottom: 10 }}>Services:</Text>
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#000', marginBottom: 15 }}>Services:</Text>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
           {sortedServices.map((service, index) => renderItem(service, index))}
@@ -380,17 +377,11 @@ function DirectoryScreen() {
       </View>
 
       <View style={{ marginBottom: 30 }}>
-        <Text style={{ fontSize: 14, fontWeight: 'bold', color: '#000', marginTop: -30, marginBottom: 10 }}>
-          Barangay's:
+        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#000', marginTop: -30, marginBottom: 15 }}>
+          Barangay:
         </Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
           {sortedOthers.map((brgy, index) => renderItem(brgy, index + 100))}
-        </View>
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-          {renderItem(bottomBarangays[0], 'wbb')}
-          {renderItem(bottomBarangays[1], 'wt')}
-          <View style={{ width: '30%' }} />
         </View>
       </View>
     </ScrollView>
