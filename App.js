@@ -393,7 +393,7 @@ function QRScreen() {
     <View style={styles.container}>
       <View style={styles.qrCard}>
         <QRCode
-          value="https://expo.dev/accounts/justinvillaflores/projects/ocpo_app_rn/builds/d2b78779-8ad8-4d0a-bc76-e1fd6b4b69cb"
+          value="https://expo.dev/accounts/justinvillaflores/projects/ocpo_app_rn/builds/fffd9936-1e7a-4e1f-aeeb-4eb399b8c6dd"
           size={200}
           color="#0d6efd"
         />
