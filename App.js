@@ -58,7 +58,7 @@ function HomeScreen() {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', paddingTop: 100, paddingHorizontal: 20 }}>
-        <Image source={require('./assets/download.png')} style={{ width: 400, height: 400, marginBottom: -50, marginTop: -120 }} />
+        <Image source={require('./assets/download.png')} style={{ width: 250, height: 350, marginBottom: -50, marginTop: -120 }} />
         <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>Welcome to Olongapo City Hotlines</Text>
         <Text style={{ fontSize: 15, fontWeight: 'bold', marginBottom: 10 }}>Call us now for emergencies:</Text>
 
@@ -180,7 +180,7 @@ function ServicesScreen() {
 
   return (
     <ScrollView
-      style={{ flex: 1, paddingHorizontal: 20, paddingTop: 20 }}
+      style={{ flex: 1, paddingHorizontal: 20, paddingTop: 10 }}
       contentContainerStyle={{ paddingBottom: 50, flexGrow: 1 }}
     >
       <View style={{ width: '100%', height: 180, borderRadius: 10, overflow: 'hidden', marginBottom: 5 }}>
@@ -302,7 +302,7 @@ function DirectoryScreen() {
   const sortedServices = otherServices.sort((a, b) => a.name.localeCompare(b.name));
 
   const bottomBarangays = [
-    { name: 'West Bajac-bajac', number: '12333', logo: require('./assets/wbb.png') },
+    { name: 'West Bajac-bajac', number: '09485075752', logo: require('./assets/wbb.png') },
     { name: 'West Tapinac', number: '09999911249', logo: require('./assets/westTapinac.png') },
   ];
 
@@ -310,18 +310,23 @@ function DirectoryScreen() {
     { name: 'Barretto', number: '09389495840', logo: require('./assets/barretto.png') },
     { name: 'East Bajac-bajac', number: '09472171542', logo: require('./assets/ebb.png') },
     { name: 'East Tapinac', number: '09985604325', logo: require('./assets/eastTapinac.png') },
-    { name: 'Gordon Heights', number: '123', logo: require('./assets/GH.png') },
-    { name: 'Kalaklan (Rescue)', number: '09671255737', logo: require('./assets/kalaklan.png') },
-    { name: 'Mabayuan', number: '123', logo: require('./assets/mabayuan.png') },
+    { name: 'Gordon Heights\n(Globe)', number: '09664632688', logo: require('./assets/GH.png') },
+    { name: 'Gordon Heights\n(Smart)', number: '09208278618', logo: require('./assets/GH.png') },
+    { name: 'GH-Rescue\n(Globe)', number: '09208278618', logo: require('./assets/GH.png') },
+    { name: 'GH-Rescue\n(Smart)', number: '09208278618', logo: require('./assets/GH.png') },
+    { name: 'Kalaklan\n(Rescue)', number: '09671255737', logo: require('./assets/kalaklan.png') },
+    { name: 'Mabayuan\n(BPAT)', number: '09605826032', logo: require('./assets/mabayuan.png') },
+    { name: 'Mabayuan\n(Rescue)', number: '09190031577', logo: require('./assets/mabayuan.png') },
     { name: 'New Asinan', number: '09628651046', logo: require('./assets/newAsinan.png') },
     { name: 'New Banicain', number: '09086864304', logo: require('./assets/newBanicain.png') },
     { name: 'New Cabalan', number: '09104845635', logo: require('./assets/newcab.png') },
-    { name: 'New Ilalim', number: '123', logo: require('./assets/newIlalim.png') },
+    { name: 'New Ilalim', number: '09476020328', logo: require('./assets/newIlalim.png') },
     { name: 'New Kalalake', number: '099457500537', logo: require('./assets/newKalalake.png') },
     { name: 'New Kababae', number: '09671924651', logo: require('./assets/newKababae.png') },
     { name: 'Old Cabalan', number: '09484745635', logo: require('./assets/oldcab.png') },
     { name: 'Pag-Asa', number: '09705730136', logo: require('./assets/pagasa.png') },
-    { name: 'Sta Rita', number: '123', logo: require('./assets/starita.png') },
+    { name: 'Sta Rita\n(BPAT)', number: '09816022965', logo: require('./assets/starita.png') },
+    { name: 'Sta Rita\n(Rescue)', number: '09318330840', logo: require('./assets/starita.png') },
   ];
 
   const sortedOthers = otherBarangays.sort((a, b) => a.name.localeCompare(b.name));
@@ -397,7 +402,7 @@ function QRScreen() {
     <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
       <Text style={{ marginBottom: 20 }}>Scan to Download this App</Text>
       <QRCode
-        value="https://expo.dev/accounts/justinvillaflores/projects/ocpo_app_rn/builds/59c8f3a6-b0bc-4777-97c4-75eb5805dadc"
+        value="https://expo.dev/accounts/justinvillaflores/projects/ocpo_app_rn/builds/d2b78779-8ad8-4d0a-bc76-e1fd6b4b69cb"
         size={200}
       />
     </View>
