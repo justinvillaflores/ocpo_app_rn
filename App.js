@@ -23,7 +23,7 @@ function HomeScreen() {
   const contacts = [
     { name: '911', image: require('./assets/911 logo.png'), number: '911' },
     { name: 'Police Station 1', image: require('./assets/1.png'), number: '09985985547' },
-    { name: 'Police Station 2', image: require('./assets/2.png'), number: '09985985549' },
+    { name: 'Police Station 2', image: require('./assets/22.png'), number: '09985985549' },
     { name: 'Police Station 3', image: require('./assets/3.png'), number: '09985985561' },
     { name: 'Police Station 4', image: require('./assets/4.png'), number: '09985985563' },
     { name: 'Police Station 5', image: require('./assets/5.png'), number: '09985985567' },
@@ -58,7 +58,7 @@ function HomeScreen() {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', paddingTop: 100, paddingHorizontal: 20 }}>
-        <Image source={require('./assets/download.png')} style={{ width: 250, height: 350, marginBottom: -50, marginTop: -120 }} />
+        <Image source={require('./assets/uloapo.png')} style={{ width: 250, height: 350, marginBottom: -50, marginTop: -120 }} />
         <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>Welcome to Olongapo City Hotlines</Text>
         <Text style={{ fontSize: 15, fontWeight: 'bold', marginBottom: 10 }}>Call us now for emergencies:</Text>
 
@@ -71,14 +71,14 @@ function HomeScreen() {
               style={{ alignItems: 'center', marginVertical: 10 }}
             >
               <Image source={contacts[7].image} style={{ width: 70, height: 70 }} />
-              <Text style={{ fontSize: 12, fontWeight: 'bold', textAlign: 'center', marginTop: 5 }}>
+              <Text style={{ fontSize: 12, fontWeight: 'bold', textAlign: 'center', marginTop: 2 }}>
                 {contacts[7].name}
               </Text>
             </TouchableOpacity>
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 2 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: -3 }}>
           {renderContact(contacts[1], 1)}
           {renderContact(contacts[2], 2)}
           {renderContact(contacts[3], 3)}
@@ -134,7 +134,7 @@ function ServicesScreen() {
 
   const stations = [
     { name: 'Police Station 1', image: require('./assets/uno.png'), link: 'https://www.facebook.com/share/173Vcn7enb/' },
-    { name: 'Police Station 2', image: require('./assets/dos.png'), link: 'https://www.facebook.com/share/16aC2ceuto/' },
+    { name: 'Police Station 2', image: require('./assets/dospage.png'), link: 'https://www.facebook.com/share/16aC2ceuto/' },
     { name: 'Police Station 3', image: require('./assets/tres.png'), link: 'https://www.facebook.com/share/1Aizuy6hcu/' },
     { name: 'Police Station 4', image: require('./assets/kwatro.png'), link: 'https://www.facebook.com/share/1HxyfdxCjc/' },
     { name: 'Police Station 5', image: require('./assets/singko.png'), link: 'https://www.facebook.com/share/16b9pj5FXS/' },
@@ -153,7 +153,7 @@ function ServicesScreen() {
   ];
 
   const renderRow = (data) => (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 }}>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
       {data.map((item, index) => (
         <TouchableOpacity
           key={index}
@@ -180,7 +180,7 @@ function ServicesScreen() {
 
   return (
     <ScrollView
-      style={{ flex: 1, paddingHorizontal: 20, paddingTop: 10 }}
+      style={{ flex: 1, paddingHorizontal: 20, paddingTop: -5 }}
       contentContainerStyle={{ paddingBottom: 50, flexGrow: 1 }}
     >
       <View style={{ width: '100%', height: 180, borderRadius: 10, overflow: 'hidden', marginBottom: 5 }}>
@@ -360,7 +360,7 @@ function DirectoryScreen() {
 
   return (
     <ScrollView style={{ flex: 1, padding: 20 }}>
-      <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 15, marginTop: 10 }}>Contacts</Text>
+      <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 15, marginTop: -5 }}>Contacts</Text>
 
       <View style={{ marginBottom: 30 }}>
         <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#000', marginBottom: 15 }}>Services:</Text>
