@@ -84,7 +84,7 @@ function HomeScreen() {
           {renderContact(contacts[3], 3)}
         </View>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 5 }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: -3 }}>
           {renderContact(contacts[4], 4)}
           {renderContact(contacts[5], 5)}
           {renderContact(contacts[6], 6)}
@@ -128,7 +128,7 @@ function ServicesScreen() {
       alert('Thank you for your feedback!');
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      alert('Something went wrong. Please try again later.');
+      alert('Connection lost. Please check your internet and try again.');
     }
   };
 
@@ -181,7 +181,7 @@ function ServicesScreen() {
   return (
     <ScrollView
       style={{ flex: 1, paddingHorizontal: 20, paddingTop: -5 }}
-      contentContainerStyle={{ paddingBottom: 50, flexGrow: 1 }}
+      contentContainerStyle={{ paddingBottom: 100, flexGrow: 1 }}
     >
       <View style={{ width: '100%', height: 180, borderRadius: 10, overflow: 'hidden', marginBottom: 5 }}>
         <Image
@@ -206,8 +206,9 @@ function ServicesScreen() {
           backgroundColor: '#0d6efd',
           paddingVertical: 10,
           borderRadius: 8,
-          marginTop: 70,
-          alignItems: 'center',
+          marginTop: 100,
+          marginBottom: -50,
+          alignItems: 'center'
         }}
       >
         <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Give Feedback</Text>
@@ -235,7 +236,7 @@ function ServicesScreen() {
                 style={[serviceStyles.input, { height: 100, textAlignVertical: 'top' }]}
               />
 
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 20 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 30 }}>
                 <TouchableOpacity
                   onPress={() => setModalVisible(false)}
                   style={[serviceStyles.button, { backgroundColor: 'gray' }]}
@@ -275,7 +276,7 @@ const serviceStyles = StyleSheet.create({
     borderColor: 'gray',
     borderWidth: 1,
     padding: 10,
-    marginTop: 5,
+    marginTop: 10,
     borderRadius: 6,
   },
   button: {
@@ -393,7 +394,7 @@ function QRScreen() {
     <View style={styles.container}>
       <View style={styles.qrCard}>
         <QRCode
-          value="https://expo.dev/accounts/justinvillaflores/projects/ocpo_app_rn/builds/fffd9936-1e7a-4e1f-aeeb-4eb399b8c6dd"
+          value="https://expo.dev/accounts/justinvillaflores/projects/ocpo_app_rn/builds/cdcbf4f6-448c-4121-982e-ec45b63dff9a"
           size={200}
           color="#0d6efd"
         />
