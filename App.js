@@ -19,78 +19,165 @@ import CustomTabBar from './CustomTabBar';
 
 const Tab = createBottomTabNavigator();
 
-function HomeScreen() {
-  const contacts = [
-    { name: '911', image: require('./assets/911 logo.png'), number: '911' },
-    { name: 'Police Station 1', image: require('./assets/1.png'), number: '09985985547' },
-    { name: 'Police Station 2', image: require('./assets/22.png'), number: '09985985549' },
-    { name: 'Police Station 3', image: require('./assets/3.png'), number: '09985985561' },
-    { name: 'Police Station 4', image: require('./assets/4.png'), number: '09985985563' },
-    { name: 'Police Station 5', image: require('./assets/5.png'), number: '09985985567' },
-    { name: 'Police Station 6', image: require('./assets/6.png'), number: '09985985569' },
-    { name: 'Olongapo City\nPolice Office', image: require('./assets/OCPO.png'), number: '09985985546' },
+function DirectoryScreen() {
+  const emergencyHotlines = [
+    { name: '911', number: '911', logo: require('./assets/911 logo.png') },
   ];
 
-  const renderContact = (contact, index) => {
-    const isStation = contact.name.includes('Police Station') && index >= 1 && index <= 6;
+  const policeStations = [
+    { name: 'Station 1', number: '09985985547', logo: require('./assets/1.png') },
+    { name: 'Station 2', number: '09985985549', logo: require('./assets/22.png') },
+    { name: 'Station 3', number: '09985985561', logo: require('./assets/3.png') },
+    { name: 'Station 4', number: '09985985563', logo: require('./assets/4.png') },
+    { name: 'Station 5', number: '09985985567', logo: require('./assets/5.png') },
+    { name: 'Station 6', number: '09985985569', logo: require('./assets/6.png') },
+  ];
 
-    return (
-      <TouchableOpacity
-        key={contact.name}
-        onPress={() => Linking.openURL(`tel:${contact.number}`)}
-        style={{ alignItems: 'center', flex: 1, marginVertical: 10 }}
-      >
-        <Image
-          source={contact.image}
+  const otherHotlines = [
+    { name: 'BFP', number: '09512779025', logo: require('./assets/BFP.png') },
+    { name: 'CDRRMO', number: '09985937446', logo: require('./assets/cdrrmo.png') },
+    { name: 'OEDC', number: '09989763369', logo: require('./assets/oedc.png') },
+    { name: 'OTPMS', number: '09289178420', logo: require('./assets/otmps.png') },
+    { name: 'Olongapo CMFC', number: '09204154070', logo: require('./assets/cmfc1.png') },
+    { name: 'Subic Water', number: '09701079495', logo: require('./assets/subicwater.png') },
+  ].sort((a, b) => a.name.localeCompare(b.name));
+
+  const barangays = [
+    { name: 'Barretto', number: '09389495840', logo: require('./assets/barretto.png') },
+    { name: 'East Bajac-bajac', number: '09472171542', logo: require('./assets/ebb.png') },
+    { name: 'East Tapinac', number: '09985604325', logo: require('./assets/eastTapinac.png') },
+    { name: 'Gordon Heights\n(Globe)', number: '09664632688', logo: require('./assets/GH.png') },
+    { name: 'Gordon Heights\n(Smart)', number: '09208278618', logo: require('./assets/GH.png') },
+    { name: 'GH-Rescue\n(Globe)', number: '09173065966', logo: require('./assets/GH.png') },
+    { name: 'GH-Rescue\n(Smart)', number: '09985937446', logo: require('./assets/GH.png') },
+    { name: 'Kalaklan\n(Rescue)', number: '09671255737', logo: require('./assets/kalaklan.png') },
+    { name: 'Mabayuan\n(BPAT)', number: '09605826032', logo: require('./assets/mabayuan.png') },
+    { name: 'Mabayuan\n(Rescue)', number: '09190031577', logo: require('./assets/mabayuan.png') },
+    { name: 'New Asinan', number: '09628651046', logo: require('./assets/newAsinan.png') },
+    { name: 'New Banicain', number: '09086864304', logo: require('./assets/newBanicain.png') },
+    { name: 'New Cabalan', number: '09104845635', logo: require('./assets/newcab.png') },
+    { name: 'New Ilalim', number: '09476020328', logo: require('./assets/newIlalim.png') },
+    { name: 'New Kalalake', number: '099457500537', logo: require('./assets/newKalalake.png') },
+    { name: 'New Kababae', number: '09671924651', logo: require('./assets/newKababae.png') },
+    { name: 'Old Cabalan', number: '09484745635', logo: require('./assets/oldcab.png') },
+    { name: 'Pag-Asa', number: '09705730136', logo: require('./assets/pagasa.png') },
+    { name: 'Sta Rita\n(BPAT)', number: '09816022965', logo: require('./assets/starita.png') },
+    { name: 'Sta Rita\n(Rescue)', number: '09318330840', logo: require('./assets/starita.png') },
+    { name: 'West Bajac-bajac', number: '09485075752', logo: require('./assets/wbb.png') },
+    { name: 'West Tapinac', number: '09999911249', logo: require('./assets/westTapinac.png') },
+  ];
+
+  const renderGrid = (items, columns = 3) => {
+    const rows = [];
+    for (let i = 0; i < items.length; i += columns) {
+      const rowItems = items.slice(i, i + columns);
+      let justifyContent = 'space-between';
+
+      if (rowItems.length === 1) justifyContent = 'flex-start';
+      else if (rowItems.length === 2) justifyContent = 'flex-start';
+
+      rows.push(
+        <View
+          key={i}
           style={{
-            width: 70,
-            height: 70,
-            ...(isStation && { borderWidth: 1, borderColor: '#000', borderRadius: 10 }),
+            flexDirection: 'row',
+            justifyContent,
+            marginBottom: 20,
           }}
-        />
-        <Text style={{ fontSize: 12, fontWeight: 'bold', textAlign: 'center', marginTop: 5 }}>
-          {contact.name}
-        </Text>
-      </TouchableOpacity>
-    );
+        >
+          {rowItems.map((item, index) => {
+            let extraStyle = {};
+            if (rowItems.length === 2 && index === 1) {
+              extraStyle = { marginLeft: '5%' };
+            }
+
+            return (
+              <TouchableOpacity
+                key={index}
+                onPress={() => Linking.openURL(`tel:${item.number}`)}
+                style={{ width: '30%', alignItems: 'center', ...extraStyle }}
+              >
+                <Image
+                  source={item.logo}
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderWidth: 1,
+                    borderColor: '#000',
+                    borderRadius: 10,
+                    resizeMode: 'contain',
+                  }}
+                />
+                <Text
+                  style={{
+                    fontSize: item.name.length > 15 ? 10 : 12,
+                    fontWeight: 'bold',
+                    textAlign: 'center',
+                    marginTop: 5,
+                  }}
+                >
+                  {item.name}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      );
+    }
+    return rows;
   };
 
   return (
-    <View style={{ flex: 1 }}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', paddingTop: 100, paddingHorizontal: 20 }}>
-        <Image source={require('./assets/uloapo.png')} style={{ width: 250, height: 350, marginBottom: -50, marginTop: -120 }} />
-        <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 10 }}>Welcome to Olongapo City Hotlines</Text>
-        <Text style={{ fontSize: 15, fontWeight: 'bold', marginBottom: 10 }}>Call us now for emergencies:</Text>
+    <ScrollView style={{ flex: 1, padding: 20 }}>
+      <View style={{ alignItems: 'center', marginBottom: 20 }}>
+        <Image
+          source={emergencyHotlines[0].logo}
+          style={{
+            width: 90,
+            height: 90,
+            resizeMode: 'contain',
+          }}
+        />
+        <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginTop: 5 }}>
+          {emergencyHotlines[0].name}
+        </Text>
+      </View>
 
-        <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between' }}>
-          {renderContact(contacts[0], 0)}
-          <View style={{ flex: 1 }} />
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <TouchableOpacity
-              onPress={() => Linking.openURL(`tel:${contacts[7].number}`)}
-              style={{ alignItems: 'center', marginVertical: 10 }}
-            >
-              <Image source={contacts[7].image} style={{ width: 70, height: 70 }} />
-              <Text style={{ fontSize: 12, fontWeight: 'bold', textAlign: 'center', marginTop: 2 }}>
-                {contacts[7].name}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 10 }}>
+        OLONGAPO CPO
+      </Text>
+      <View style={{ alignItems: 'center', marginBottom: 20 }}>
+        <Image
+          source={require('./assets/OCPO.png')}
+          style={{
+            width: 100,
+            height: 100,
+            resizeMode: 'contain',
+          }}
+        />
+      </View>
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: -3 }}>
-          {renderContact(contacts[1], 1)}
-          {renderContact(contacts[2], 2)}
-          {renderContact(contacts[3], 3)}
-        </View>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 20 }}>
+        POLICE STATIONS
+      </Text>
+      {renderGrid(policeStations)}
 
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: -3 }}>
-          {renderContact(contacts[4], 4)}
-          {renderContact(contacts[5], 5)}
-          {renderContact(contacts[6], 6)}
-        </View>
-      </ScrollView>
-    </View>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 30, marginTop: 20 }}>
+        OTHER EMERGENCY HOTLINES
+      </Text>
+      {renderGrid(otherHotlines)}
+
+      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 30, marginTop: 20 }}>
+        BARANGAY’S
+      </Text>
+      {renderGrid(barangays)}
+
+      <View style={{ marginTop: 40, paddingBottom: 40, alignItems: 'center' }}>
+        <Text style={{ fontSize: 12, color: '#666', textAlign: 'center' }}>
+          © 2025 Olongapo City Police Hotline App. All rights reserved.
+        </Text>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -101,7 +188,6 @@ function ServicesScreen() {
 
   const submitFeedback = async () => {
     const ratingNumber = parseInt(rating);
-
     if (isNaN(ratingNumber) || ratingNumber < 1 || ratingNumber > 5) {
       alert('Please enter a valid rating between 1 and 5.');
       return;
@@ -133,6 +219,10 @@ function ServicesScreen() {
   };
 
   const stations = [
+    { name: 'Philippine National Police', image: require('./assets/pnp.png'), link: 'https://www.facebook.com/pnp.pio ' },
+    { name: 'Police Regional Office 3', image: require('./assets/pro33.png'), link: 'https://www.facebook.com/PoliceRegionalOffice3/ ' },
+    { name: 'Olongapo City\nPolice Office', image: require('./assets/ocpopage.png'), link: 'https://www.facebook.com/pulisgapo' },
+    { name: 'Olongapo CMFC', image: require('./assets/cmfc.png'), link: 'https://www.facebook.com/olongapo.cmfc.3/' },
     { name: 'Police Station 1', image: require('./assets/uno.png'), link: 'https://www.facebook.com/share/173Vcn7enb/' },
     { name: 'Police Station 2', image: require('./assets/dospage.png'), link: 'https://www.facebook.com/share/16aC2ceuto/' },
     { name: 'Police Station 3', image: require('./assets/tres.png'), link: 'https://www.facebook.com/share/1Aizuy6hcu/' },
@@ -145,38 +235,55 @@ function ServicesScreen() {
     { name: 'National Police\nClearance', image: require('./assets/npc.png'), link: 'https://pnpclearance.ph' },
     { name: 'LTOPF', image: require('./assets/LTOPF.png'), link: 'https://feo.pnp-csg.org/' },
     { name: 'SOSIA', image: require('./assets/SOSIA.png'), link: 'https://sosia.pnp-csg.org/' },
+    { name: 'CSWDO\nOlongapo', image: require('./assets/dswd.png'), link: 'https://www.dswd.gov.ph/dswd-satellite-office/' },
+    { name: 'Olongapo\nCity Hall', image: require('./assets/ocpopage1.png'), link: 'https://www.facebook.com/groups/117277545012392/' },
+    { name: 'Olongapo City Information Center', image: require('./assets/ocic1.png'), link: 'https://www.facebook.com/olongapopublicaffairs/ ' },
   ];
 
   const reportItems = [
     { name: 'Sumbong Nyo\nAksyon Agad', image: require('./assets/snaa.png'), link: 'https://www.facebook.com/RektangKonekAksyonAgad/' },
-    { name: 'WCPC', image: require('./assets/wcpc.png'), link: 'https://www.facebook.com/share/1Aw1teNrn6/' },
+    { name: 'WCPCD', image: require('./assets/wcpc.png'), link: 'https://www.facebook.com/share/1Aw1teNrn6/' },
   ];
 
-  const renderRow = (data) => (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 15 }}>
-      {data.map((item, index) => (
-        <TouchableOpacity
-          key={index}
-          onPress={() => Linking.openURL(item.link)}
-          style={{ alignItems: 'center', flex: 1 }}
-        >
-          <Image
-            source={item.image}
-            style={{
-              width: 70,
-              height: 70,
-              marginBottom: 5,
-              borderWidth: 1,
-              borderColor: '#000',
-              borderRadius: 10,
-            }}
-          />
-          <Text style={{ fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>{item.name}</Text>
-        </TouchableOpacity>
-      ))}
-      {data.length === 2 && <View style={{ flex: 1 }} />}
-    </View>
-  );
+  const renderGrid = (data, columns = 3) => {
+    const rows = [];
+    for (let i = 0; i < data.length; i += columns) {
+      const rowItems = data.slice(i, i + columns);
+      while (rowItems.length < columns) {
+        rowItems.push(null);
+      }
+      rows.push(rowItems);
+    }
+
+    return rows.map((row, idx) => (
+      <View key={idx} style={{ flexDirection: 'row', justifyContent: 'flex-start', marginBottom: 15 }}>
+        {row.map((item, index) =>
+          item ? (
+            <TouchableOpacity
+              key={index}
+              onPress={() => Linking.openURL(item.link)}
+              style={{ alignItems: 'center', flex: 1 }}
+            >
+              <Image
+                source={item.image}
+                style={{
+                  width: 70,
+                  height: 70,
+                  marginBottom: 5,
+                  borderWidth: 1,
+                  borderColor: '#000',
+                  borderRadius: 10,
+                }}
+              />
+              <Text style={{ fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>{item.name}</Text>
+            </TouchableOpacity>
+          ) : (
+            <View key={index} style={{ flex: 1 }} />
+          )
+        )}
+      </View>
+    ));
+  };
 
   return (
     <ScrollView
@@ -191,14 +298,13 @@ function ServicesScreen() {
       </View>
 
       <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Report</Text>
-      {renderRow(reportItems)}
+      {renderGrid(reportItems, 3)}
 
       <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 10 }}>Services</Text>
-      {renderRow(services)}
+      {renderGrid(services, 3)}
 
       <Text style={{ fontSize: 16, fontWeight: 'bold', marginBottom: 20 }}>Pages</Text>
-      {renderRow(stations.slice(0, 3))}
-      {renderRow(stations.slice(3, 6))}
+      {renderGrid(stations, 3)}
 
       <TouchableOpacity
         onPress={() => setModalVisible(true)}
@@ -290,111 +396,12 @@ const serviceStyles = StyleSheet.create({
   },
 });
 
-function DirectoryScreen() {
-  const fixedServiceLeft = { name: 'OTPMS', number: '09289178420', logo: require('./assets/otmps.png') };
-  const fixedServiceCenter = { name: 'Subic Water', number: '09701079495', logo: require('./assets/subicwater.png') };
-
-  const otherServices = [
-    { name: 'BFP', number: '09512779025', logo: require('./assets/BFP.png') },
-    { name: 'CDRRMO', number: '09985937446', logo: require('./assets/cdrrmo.png') },
-    { name: 'OEDC', number: '09989763369', logo: require('./assets/oedc.png') },
-  ];
-
-  const sortedServices = otherServices.sort((a, b) => a.name.localeCompare(b.name));
-
-  const otherBarangays = [
-    { name: 'Barretto', number: '09389495840', logo: require('./assets/barretto.png') },
-    { name: 'East Bajac-bajac', number: '09472171542', logo: require('./assets/ebb.png') },
-    { name: 'East Tapinac', number: '09985604325', logo: require('./assets/eastTapinac.png') },
-    { name: 'Gordon Heights\n(Globe)', number: '09664632688', logo: require('./assets/GH.png') },
-    { name: 'Gordon Heights\n(Smart)', number: '09208278618', logo: require('./assets/GH.png') },
-    { name: 'GH-Rescue\n(Globe)', number: '09173065966', logo: require('./assets/GH.png') },
-    { name: 'GH-Rescue\n(Smart)', number: '09985937446', logo: require('./assets/GH.png') },
-    { name: 'Kalaklan\n(Rescue)', number: '09671255737', logo: require('./assets/kalaklan.png') },
-    { name: 'Mabayuan\n(BPAT)', number: '09605826032', logo: require('./assets/mabayuan.png') },
-    { name: 'Mabayuan\n(Rescue)', number: '09190031577', logo: require('./assets/mabayuan.png') },
-    { name: 'New Asinan', number: '09628651046', logo: require('./assets/newAsinan.png') },
-    { name: 'New Banicain', number: '09086864304', logo: require('./assets/newBanicain.png') },
-    { name: 'New Cabalan', number: '09104845635', logo: require('./assets/newcab.png') },
-    { name: 'New Ilalim', number: '09476020328', logo: require('./assets/newIlalim.png') },
-    { name: 'New Kalalake', number: '099457500537', logo: require('./assets/newKalalake.png') },
-    { name: 'New Kababae', number: '09671924651', logo: require('./assets/newKababae.png') },
-    { name: 'Old Cabalan', number: '09484745635', logo: require('./assets/oldcab.png') },
-    { name: 'Pag-Asa', number: '09705730136', logo: require('./assets/pagasa.png') },
-    { name: 'Sta Rita\n(BPAT)', number: '09816022965', logo: require('./assets/starita.png') },
-    { name: 'Sta Rita\n(Rescue)', number: '09318330840', logo: require('./assets/starita.png') },
-    { name: 'West Bajac-bajac', number: '09485075752', logo: require('./assets/wbb.png') },
-    { name: 'West Tapinac', number: '09999911249', logo: require('./assets/westTapinac.png') },
-  ];
-
-  const sortedOthers = otherBarangays.sort((a, b) => a.name.localeCompare(b.name));
-
-  const renderItem = (item, index) => (
-    <TouchableOpacity
-      key={index}
-      onPress={() => Linking.openURL(`tel:${item.number}`)}
-      style={{ width: '30%', alignItems: 'center', marginBottom: 20 }}
-    >
-      <Image
-        source={item.logo}
-        style={{
-          width: 60,
-          height: 60,
-          borderWidth: 1,
-          borderColor: '#000',
-          borderRadius: 10,
-          resizeMode: 'contain',
-        }}
-      />
-      <Text
-        style={{
-          fontSize: item.name.length > 15 ? 10 : 12,
-          fontWeight: 'bold',
-          textAlign: 'center',
-          marginTop: 5,
-        }}
-      >
-        {item.name}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  return (
-    <ScrollView style={{ flex: 1, padding: 20 }}>
-      <Text style={{ fontSize: 30, fontWeight: 'bold', marginBottom: 15, marginTop: -5 }}>Contacts</Text>
-
-      <View style={{ marginBottom: 30 }}>
-        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#000', marginBottom: 15 }}>Services:</Text>
-
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-          {sortedServices.map((service, index) => renderItem(service, index))}
-        </View>
-
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-          {renderItem(fixedServiceLeft, 'otpms')}
-          {renderItem(fixedServiceCenter, 'subic')}
-          <View style={{ width: '30%' }} />
-        </View>
-      </View>
-
-      <View style={{ marginBottom: 30 }}>
-        <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#000', marginTop: -30, marginBottom: 15 }}>
-          Barangay:
-        </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-          {sortedOthers.map((brgy, index) => renderItem(brgy, index + 100))}
-        </View>
-      </View>
-    </ScrollView>
-  );
-}
-
 function QRScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.qrCard}>
         <QRCode
-          value="https://expo.dev/accounts/justinvillaflores/projects/ocpo_app_rn/builds/cdcbf4f6-448c-4121-982e-ec45b63dff9a"
+          value="https://expo.dev/accounts/justinvillaflores/projects/ocpo_app_rn/builds/de1293c0-b165-4c18-8d6f-0262d301e1c1"
           size={200}
           color="#0d6efd"
         />
@@ -473,9 +480,8 @@ export default function App() {
             screenOptions={{ headerShown: false }}
             tabBar={(props) => <CustomTabBar {...props} />}
           >
-            <Tab.Screen name="Home" component={HomeScreen} />
-            <Tab.Screen name="Services" component={ServicesScreen} />
             <Tab.Screen name="Directory" component={DirectoryScreen} />
+            <Tab.Screen name="Services" component={ServicesScreen} />
             <Tab.Screen name="QR Code" component={QRScreen} />
           </Tab.Navigator>
         </NavigationContainer>

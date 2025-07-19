@@ -29,6 +29,11 @@
     "updates": {
       "url": "https://u.expo.dev/936452b8-6378-4fa6-bbb1-315f10f995ca"
     },
-    "ios": {}
+    "ios": {
+      "bundleIdentifier": "com.ocpo.hotlines",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    }
   }
 }
