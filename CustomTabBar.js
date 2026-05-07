@@ -3,12 +3,27 @@ import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function CustomTabBar({ state, descriptors, navigation }) {
+
+  const order = {
+    'Directory': 0,
+    'Services': 1,
+    'Messages': 2,
+    'Announce': 3,
+    'Profile': 4
+  };
+
+  const reorderedRoutes = [...state.routes].sort(
+    (a, b) => order[a.name] - order[b.name]
+  );
+
   return (
     <View style={styles.tabBar}>
-      {state.routes.map((route, index) => {
+      {reorderedRoutes.map((route, index) => {
         const { options } = descriptors[route.key];
         const label = options.tabBarLabel ?? route.name;
-        const isFocused = state.index === index;
+
+        const isFocused =
+          state.index === state.routes.findIndex(r => r.key === route.key);
 
         const onPress = () => {
           const event = navigation.emit({
@@ -22,42 +37,30 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
           }
         };
 
-        const iconName =
-          route.name === 'Home'
-            ? 'home'
-            : route.name === 'Services'
-            ? 'document-text'
-            : route.name === 'Directory'
-            ? 'call'
-            : 'qr-code';
+        const getIcon = () => {
+          switch (route.name) {
+            case 'Directory': return isFocused ? 'call' : 'call-outline';
+            case 'Services': return isFocused ? 'document-text' : 'document-text-outline';
+            case 'Messages': return isFocused ? 'chatbubble' : 'chatbubble-outline';
+            case 'Announce': return isFocused ? 'megaphone' : 'megaphone-outline';
+            case 'Profile': return isFocused ? 'person' : 'person-outline';
+            default: return 'help-outline';
+          }
+        };
 
         return (
           <TouchableOpacity key={index} onPress={onPress} style={styles.tab}>
-            <View style={styles.iconWrapper}>
-              <View
-                style={[
-                  styles.iconCircle,
-                  isFocused && styles.activeIconCircle,
-                ]}
-              >
-                <Ionicons
-                  name={iconName}
-                  size={26}
-                  color={isFocused ? '#0d6efd' : '#ccc'}
-                />
-              </View>
-              <Text
-                style={{
-                  color: isFocused ? '#0d6efd' : '#ccc',
-                  fontSize: 12,
-                  fontWeight: '600',
-                  marginTop: -2,
-                  marginBottom: 10,
-                }}
-              >
-                {label}
-              </Text>
-            </View>
+            <Ionicons
+              name={getIcon()}
+              size={24}
+              color={isFocused ? '#0d6efd' : '#8e8e93'}
+            />
+            <Text style={[
+              styles.label,
+              { color: isFocused ? '#0d6efd' : '#8e8e93' }
+            ]}>
+              {label}
+            </Text>
           </TouchableOpacity>
         );
       })}
@@ -68,42 +71,25 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
-    height: 85,
+    height: 75,
     backgroundColor: '#fff',
-    borderTopLeftRadius: -5,
-    borderTopRightRadius: -5,
-    elevation: 15,
-    shadowColor: '#000',
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: -2 },
-    shadowRadius: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#f1f1f1',
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingBottom: 10,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    elevation: 20,
   },
   tab: {
+    alignItems: 'center',
+    justifyContent: 'center',
     flex: 1,
-    alignItems: 'center',
   },
-  iconWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconCircle: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-  },
-  activeIconCircle: {
-    marginTop: -20,
-    elevation: 10,
-    shadowColor: '#0d6efd',
-    shadowOpacity: 0.3,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 5,
-    marginBottom: 4,
+  label: {
+    fontSize: 10,
+    fontWeight: '600',
+    marginTop: 4,
   },
 });

@@ -1,13 +1,14 @@
 {
   "expo": {
     "name": "Olongapo City HotLines",
-    "slug": "ocpo_app_rn",
+    "slug": "ocpo-hotlines",
+    "owner": "jstnvdev",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/appLogo.png",
+    "icon": "./assets/1010.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/appLogo.png",
+      "image": "./assets/1010.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -16,24 +17,27 @@
     ],
     "android": {
       "package": "com.justinvillaflores.ocpo_app_rn",
-      "versionCode": 1
-    },
-    "extra": {
-      "eas": {
-        "projectId": "936452b8-6378-4fa6-bbb1-315f10f995ca"
-      }
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/936452b8-6378-4fa6-bbb1-315f10f995ca"
+      "versionCode": 3,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "ios": {
-      "bundleIdentifier": "com.ocpo.hotlines",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+      "bundleIdentifier": "com.ocpo.hotlines"
+    },
+    "plugins": [
+      "expo-audio",
+      "expo-video"
+    ],
+    "runtimeVersion": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "637d8258-0313-4008-9131-168623f45d01"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/637d8258-0313-4008-9131-168623f45d01"
     }
   }
 }
