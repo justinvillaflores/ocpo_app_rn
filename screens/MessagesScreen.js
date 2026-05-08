@@ -9,12 +9,12 @@ import * as SMS from 'expo-sms';
 import NetInfo from '@react-native-community/netinfo';
 import * as Location from 'expo-location';
 
-import { db, auth } from '../firebaseConfig';
+import { db, auth, storage } from '../firebaseConfig'; // In-import ang storage
 import {
   collection, query, where, onSnapshot, orderBy,
-  addDoc, serverTimestamp, doc, setDoc, getDoc, updateDoc
+  addDoc, serverTimestamp, doc, setDoc, getDoc, updateDoc, getDocs, limit
 } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { onAuthStateChanged } from 'firebase/auth';
 
 export default function MessagesScreen() {
@@ -33,9 +33,11 @@ export default function MessagesScreen() {
 
   const flatListRef = useRef(null);
 
-  // Auth and Connection Listener
+  // 1. Connectivity & Auth Watcher
   useEffect(() => {
-    const unsubscribeNet = NetInfo.addEventListener(state => setIsConnected(state.isConnected));
+    const unsubscribeNet = NetInfo.addEventListener(state => {
+      setIsConnected(state.isConnected);
+    });
     const unsubscribeAuth = onAuthStateChanged(auth, (authenticatedUser) => {
       if (authenticatedUser) setUser(authenticatedUser);
       else { setUser(null); setLoading(false); }
@@ -43,60 +45,81 @@ export default function MessagesScreen() {
     return () => { unsubscribeNet(); unsubscribeAuth(); };
   }, []);
 
-  // Fetch User Profile
+  // 2. Load Profile (Cache Aware)
   useEffect(() => {
     const initSetup = async () => {
       if (user) {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          setCurrentUserName(userDoc.data().username || userDoc.data().name || "Citizen User");
-        }
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid));
+          if (userDoc.exists()) {
+            setCurrentUserName(userDoc.data().username || userDoc.data().name || "Citizen User");
+          }
+        } catch (e) { console.log("Profile load error:", e); }
       }
     };
     initSetup();
   }, [user]);
 
-  // Listen to Responders
+  // 3. Responders List (Offline Support)
   useEffect(() => {
     if (!user) return;
+
     const q = query(collection(db, "users"), where("role", "==", "responder"));
+
+    // Ginagamit ang onSnapshot para sa real-time pero Firestore automatically handles cache
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setResponders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const responderList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setResponders(responderList);
       setLoading(false);
-    }, (error) => console.log("Responders Listener Error:", error));
+    }, async (error) => {
+      // Fallback: Kapag nag-fail (minsan dahil sa internet), subukan ang direct cache access
+      const querySnapshot = await getDocs(q);
+      setResponders(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setLoading(false);
+    });
+
     return () => unsubscribe();
   }, [user]);
 
-  // Listen to Messages
+  // 4. Chat Messages (Offline Support)
   useEffect(() => {
-    if (inChat && selectedContact && user && isConnected) {
+    if (inChat && selectedContact && user) {
       const chatId = [user.uid, selectedContact.id].sort().join('_');
-      const q = query(collection(db, "chats", chatId, "messages"), orderBy("createdAt", "desc"));
+      const q = query(collection(db, "chats", chatId, "messages"), orderBy("createdAt", "desc"), limit(50));
+
       const unsubscribe = onSnapshot(q, (snapshot) => {
         setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      }, (error) => console.log("Messages Listener Error:", error));
+      });
       return () => unsubscribe();
     }
-  }, [inChat, selectedContact, user, isConnected]);
+  }, [inChat, selectedContact, user]);
 
-  const handleSendSMS = async () => {
+  const handleSendSMS = async (textToSend) => {
     const phoneNumber = selectedContact?.phoneNumber || selectedContact?.phone;
-    if (!phoneNumber) return Alert.alert("Error", "No phone number available.");
+    if (!phoneNumber) return Alert.alert("Error", "Walang phone number ang responder na ito.");
+
     const isAvailable = await SMS.isAvailableAsync();
     if (isAvailable) {
-      await SMS.sendSMSAsync([phoneNumber], `[OneCall - ${currentUserName}]: ${messageText}`);
+      await SMS.sendSMSAsync([phoneNumber], `[OneCall Emergency - ${currentUserName}]: ${textToSend}`);
       setMessageText("");
+    } else {
+      Alert.alert("SMS Error", "Hindi suportado ang SMS sa device na ito.");
     }
   };
 
   const handleAction = async () => {
     if (!messageText.trim() || !selectedContact || !user) return;
 
+    // Kapag Offline, rekta SMS agad ang offer
     if (!isConnected) {
-      Alert.alert("Offline Mode", "Sending via SMS instead.", [
-        { text: "Cancel", style: "cancel" },
-        { text: "Send SMS", onPress: handleSendSMS }
-      ]);
+      Alert.alert(
+        "Offline Mode",
+        "Mukhang wala kang internet. Gusto mo bang i-send ito via SMS?",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Send SMS", onPress: () => handleSendSMS(messageText) }
+        ]
+      );
       return;
     }
 
@@ -106,7 +129,6 @@ export default function MessagesScreen() {
     setMessageText("");
 
     try {
-      // WATERFALL LOGIC: Unahin ang Chat Doc para sa permissions
       await setDoc(chatRef, {
         lastMessage: tempMsg,
         updatedAt: serverTimestamp(),
@@ -115,7 +137,6 @@ export default function MessagesScreen() {
         responderName: selectedContact.username || selectedContact.name || "Responder"
       }, { merge: true });
 
-      // Saka ang Message Doc
       await addDoc(collection(db, "chats", chatId, "messages"), {
         text: tempMsg,
         senderId: user.uid,
@@ -123,7 +144,7 @@ export default function MessagesScreen() {
         createdAt: serverTimestamp(),
       });
 
-      // Background Location Update
+      // Passive Location Update (Para alam ng responder kung nasaan ka)
       Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then(loc => {
         updateDoc(doc(db, "users", user.uid), {
           lastKnownLat: loc.coords.latitude,
@@ -133,31 +154,57 @@ export default function MessagesScreen() {
       }).catch(() => {});
 
     } catch (error) {
-      console.error(error);
-      Alert.alert("Error", "Hindi ma-access ang server. Pakicheck ang connection.");
+      Alert.alert("Error", "Hindi ma-send ang chat. I-try ang SMS.");
     }
   };
 
   const handlePickImage = async () => {
-    if (!isConnected) return Alert.alert("Offline", "Uploading photos requires internet.");
-    const result = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, quality: 0.5 });
+    if (!isConnected) return Alert.alert("Offline", "Kailangan ng internet para mag-upload ng litrato.");
+
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return Alert.alert("Permission Denied", "Kailangan namin ng access sa gallery.");
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      quality: 0.4, // Lower quality para mabilis ang upload sa emergency
+      base64: false
+    });
 
     if (!result.canceled) {
       setUploading(true);
       try {
-        const response = await fetch(result.assets[0].uri);
+        const uri = result.assets[0].uri;
+        const filename = `chat_images/${user.uid}_${Date.now()}.jpg`;
+        const imageRef = ref(storage, filename);
+
+        // Convert URI to Blob
+        const response = await fetch(uri);
         const blob = await response.blob();
-        const storageRef = ref(getStorage(), `chat_images/${user.uid}_${Date.now()}.jpg`);
-        await uploadBytes(storageRef, blob);
-        const url = await getDownloadURL(storageRef);
+
+        // Upload to Storage
+        await uploadBytes(imageRef, blob);
+        const url = await getDownloadURL(imageRef);
 
         const chatId = [user.uid, selectedContact.id].sort().join('_');
-        await setDoc(doc(db, "chats", chatId), { updatedAt: serverTimestamp() }, { merge: true });
+
+        // Update Chat Metadata
+        await setDoc(doc(db, "chats", chatId), {
+          updatedAt: serverTimestamp(),
+          lastMessage: "Sent a photo"
+        }, { merge: true });
+
+        // Add Message with Image URL
         await addDoc(collection(db, "chats", chatId, "messages"), {
-          image: url, senderId: user.uid, receiverId: selectedContact.id, createdAt: serverTimestamp(), text: "Sent a photo"
+          image: url,
+          senderId: user.uid,
+          receiverId: selectedContact.id,
+          createdAt: serverTimestamp(),
+          text: "" // Empty text dahil image ang focus
         });
+
       } catch (e) {
-        Alert.alert("Upload Error", "Failed to upload image.");
+        console.error("Upload detail:", e);
+        Alert.alert("Upload Error", "Hindi ma-upload ang image. Pakicheck ang connection.");
       } finally {
         setUploading(false);
       }
@@ -176,7 +223,6 @@ export default function MessagesScreen() {
     );
   }
 
-  // --- UI FOR LIST VIEW ---
   if (!inChat) {
     return (
       <SafeAreaView style={styles.container}>
@@ -208,7 +254,6 @@ export default function MessagesScreen() {
     );
   }
 
-  // --- UI FOR CHAT VIEW ---
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.chatHeader}>
@@ -230,7 +275,7 @@ export default function MessagesScreen() {
         renderItem={({ item }) => (
           <View style={item.senderId === user?.uid ? styles.msgSent : styles.msgReceived}>
             {item.image && <Image source={{ uri: item.image }} style={styles.msgImage} resizeMode="cover" />}
-            {item.text && <Text style={item.senderId === user?.uid ? styles.msgTextSent : styles.msgText}>{item.text}</Text>}
+            {item.text !== "" && <Text style={item.senderId === user?.uid ? styles.msgTextSent : styles.msgText}>{item.text}</Text>}
           </View>
         )}
       />

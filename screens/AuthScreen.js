@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ScrollView, Alert, ActivityIndicator, Modal, FlatList
@@ -8,7 +8,8 @@ import { auth, db } from '../firebaseConfig';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  onAuthStateChanged
 } from 'firebase/auth';
 import { setDoc, doc } from 'firebase/firestore';
 
@@ -19,11 +20,12 @@ const OLONGAPO_BARANGAYS = [
   "Pag-Asa", "Sta Rita", "West Bajac-bajac", "West Tapinac"
 ].sort();
 
-export default function AuthScreen() {
+export default function AuthScreen({ navigation }) {
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   // Address Modal State
   const [showAddressModal, setShowAddressModal] = useState(false);
@@ -33,9 +35,21 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
-  const [barangay, setBarangay] = useState(''); // Barangay selection
-  const [street, setStreet] = useState(''); // Specific street/house no.
+  const [barangay, setBarangay] = useState('');
+  const [street, setStreet] = useState('');
   const [contact, setContact] = useState('');
+
+  // --- AUTO LOGIN LOGIC ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // ERROR FIX: Pinalitan ang 'Dashboard' ng 'ServicesScreen' base sa iyong project structure
+        navigation.replace('ServicesScreen');
+      }
+      setIsCheckingAuth(false);
+    });
+    return unsubscribe;
+  }, []);
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
@@ -71,7 +85,6 @@ export default function AuthScreen() {
         const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
         const user = userCredential.user;
 
-        // Pinagsama ang Street at Barangay
         const fullAddress = `${street.trim()}, Brgy. ${barangay}, Olongapo City`;
 
         await setDoc(doc(db, "users", user.uid), {
@@ -85,19 +98,23 @@ export default function AuthScreen() {
           createdAt: new Date().toISOString()
         });
 
-        Alert.alert("Welcome to OneCall!", "Your account has been created successfully.");
+        Alert.alert("Welcome!", "Account created successfully.");
       }
     } catch (error) {
-      console.log("Auth Error: ", error.code);
-      let errorMessage = error.message;
-      if (error.code === 'auth/user-not-found') errorMessage = "No account found with this email.";
-      if (error.code === 'auth/wrong-password') errorMessage = "Incorrect password.";
-      if (error.code === 'auth/email-already-in-use') errorMessage = "That email is already registered.";
-      Alert.alert("Authentication Error", errorMessage);
+      Alert.alert("Authentication Error", error.message);
     } finally {
       setLoading(false);
     }
   };
+
+  if (isCheckingAuth) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color="#003399" />
+        <Text style={{ marginTop: 10, color: '#003399' }}>Checking Session...</Text>
+      </View>
+    );
+  }
 
   const filteredBarangays = OLONGAPO_BARANGAYS.filter(b =>
     b.toLowerCase().includes(searchBarangay.toLowerCase())
@@ -108,26 +125,17 @@ export default function AuthScreen() {
       <Text style={styles.logoText}>OneCall</Text>
 
       <Text style={styles.welcomeTitle}>{isLogin ? "Welcome Back" : "Create Account"}</Text>
-      <Text style={styles.subTitle}>{isLogin ? "Login to your account" : "Register to access emergency hotlines"}</Text>
+      <Text style={styles.subTitle}>{isLogin ? "Login to your account" : "Register for emergency access"}</Text>
 
       <View style={styles.form}>
         {!isLogin && (
           <>
             <View style={styles.inputContainer}>
               <Ionicons name="person-outline" size={20} color="#003399" />
-              <TextInput
-                placeholder="Full Name"
-                style={styles.input}
-                value={username}
-                onChangeText={setUsername}
-              />
+              <TextInput placeholder="Full Name" style={styles.input} value={username} onChangeText={setUsername} />
             </View>
 
-            {/* SELECT BARANGAY */}
-            <TouchableOpacity
-              style={styles.inputContainer}
-              onPress={() => setShowAddressModal(true)}
-            >
+            <TouchableOpacity style={styles.inputContainer} onPress={() => setShowAddressModal(true)}>
               <Ionicons name="location-outline" size={20} color="#003399" />
               <Text style={[styles.input, { color: barangay ? '#000' : '#999', paddingTop: 15 }]}>
                 {barangay || "Select Barangay"}
@@ -135,58 +143,30 @@ export default function AuthScreen() {
               <Ionicons name="chevron-down" size={20} color="#003399" />
             </TouchableOpacity>
 
-            {/* TYPE STREET */}
             {barangay !== '' && (
               <View style={[styles.inputContainer, { backgroundColor: '#E3F2FD' }]}>
                 <Ionicons name="map-outline" size={20} color="#003399" />
-                <TextInput
-                  placeholder="House No. / Street / Block & Lot"
-                  style={styles.input}
-                  value={street}
-                  onChangeText={setStreet}
-                />
+                <TextInput placeholder="House No. / Street" style={styles.input} value={street} onChangeText={setStreet} />
               </View>
             )}
 
             <View style={styles.inputContainer}>
               <Ionicons name="call-outline" size={20} color="#003399" />
-              <TextInput
-                placeholder="Contact Number"
-                style={styles.input}
-                value={contact}
-                onChangeText={setContact}
-                keyboardType="phone-pad"
-              />
+              <TextInput placeholder="Contact Number" style={styles.input} value={contact} onChangeText={setContact} keyboardType="phone-pad" />
             </View>
           </>
         )}
 
         <View style={styles.inputContainer}>
           <Ionicons name="mail-outline" size={20} color="#003399" />
-          <TextInput
-            placeholder="Email Address"
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-          />
+          <TextInput placeholder="Email Address" style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" />
         </View>
 
         <View style={styles.inputContainer}>
           <Ionicons name="lock-closed-outline" size={20} color="#003399" />
-          <TextInput
-            placeholder="Password"
-            style={styles.input}
-            secureTextEntry={!showPassword}
-            value={password}
-            onChangeText={setPassword}
-          />
+          <TextInput placeholder="Password" style={styles.input} secureTextEntry={!showPassword} value={password} onChangeText={setPassword} />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-            <Ionicons
-              name={showPassword ? "eye-outline" : "eye-off-outline"}
-              size={20}
-              color="#003399"
-            />
+            <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color="#003399" />
           </TouchableOpacity>
         </View>
 
@@ -194,7 +174,7 @@ export default function AuthScreen() {
           <View style={styles.optionsContainer}>
             <TouchableOpacity style={styles.rememberMe} onPress={() => setRememberMe(!rememberMe)}>
               <Ionicons name={rememberMe ? "checkbox" : "square-outline"} size={20} color={rememberMe ? "#0047AB" : "#666"} />
-              <Text style={styles.rememberText}>Remember Me</Text>
+              <Text style={styles.rememberText}>Stay logged in</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleForgotPassword}>
               <Text style={styles.forgotText}>Forgot Password?</Text>
@@ -214,7 +194,6 @@ export default function AuthScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* BARANGAY MODAL */}
       <Modal visible={showAddressModal} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -224,23 +203,12 @@ export default function AuthScreen() {
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
-            <TextInput
-              style={styles.modalSearch}
-              placeholder="Search..."
-              value={searchBarangay}
-              onChangeText={setSearchBarangay}
-            />
+            <TextInput style={styles.modalSearch} placeholder="Search..." value={searchBarangay} onChangeText={setSearchBarangay} />
             <FlatList
               data={filteredBarangays}
               keyExtractor={(item) => item}
               renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.barangayItem}
-                  onPress={() => {
-                    setBarangay(item);
-                    setShowAddressModal(false);
-                  }}
-                >
+                <TouchableOpacity style={styles.barangayItem} onPress={() => { setBarangay(item); setShowAddressModal(false); }}>
                   <Text style={styles.barangayText}>{item}</Text>
                   {barangay === item && <Ionicons name="checkmark-circle" size={20} color="#003399" />}
                 </TouchableOpacity>
@@ -259,15 +227,7 @@ const styles = StyleSheet.create({
   welcomeTitle: { fontSize: 28, fontWeight: '900', color: '#003399' },
   subTitle: { fontSize: 14, color: '#666', marginBottom: 30 },
   form: { width: '100%' },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#E8F5E9',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 15,
-    height: 55
-  },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', borderRadius: 12, paddingHorizontal: 15, marginBottom: 15, height: 55 },
   input: { flex: 1, marginLeft: 10, fontSize: 15 },
   optionsContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5 },
   rememberMe: { flexDirection: 'row', alignItems: 'center' },
@@ -277,7 +237,6 @@ const styles = StyleSheet.create({
   buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   toggleContainer: { marginTop: 20, alignItems: 'center' },
   toggleText: { color: '#666', fontSize: 13 },
-
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 25, borderTopRightRadius: 25, height: '70%', padding: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },

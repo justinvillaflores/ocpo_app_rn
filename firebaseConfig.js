@@ -4,7 +4,7 @@ import {
   getReactNativePersistence,
   getAuth
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -20,6 +20,7 @@ const firebaseConfig = {
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
+// Auth Persistence - Sinisiguro nito na isang beses lang mag-login
 let auth;
 if (getApps().length > 0) {
     try {
@@ -35,6 +36,10 @@ if (getApps().length > 0) {
     });
 }
 
+// Firestore with Offline Persistence
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache()
+});
+
 export { auth };
-export const db = getFirestore(app);
 export const storage = getStorage(app);
