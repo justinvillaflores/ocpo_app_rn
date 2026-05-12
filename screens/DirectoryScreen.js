@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, Image, Linking, ActivityIndicator } from 'react-native';
-
 import { db } from '../firebaseConfig';
-
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 
 export default function DirectoryScreen() {
@@ -10,6 +8,7 @@ export default function DirectoryScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Ang onSnapshot ay gumagana kahit offline basta may cached data
     const q = query(collection(db, "hotlines"), orderBy("name", "asc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -52,7 +51,6 @@ export default function DirectoryScreen() {
               style={{ alignItems: 'center', flex: 1 }}
             >
               <Image
-                // Gagamit ng imageUrl galing sa Admin side
                 source={item.imageUrl ? { uri: item.imageUrl } : require('../assets/OCPO.png')}
                 style={{
                   width: 70,
@@ -77,7 +75,7 @@ export default function DirectoryScreen() {
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
-        <ActivityIndicator size="large" color="#0000ff" />
+        <ActivityIndicator size="large" color="#0047AB" />
         <Text style={{ marginTop: 10 }}>Updating Directory...</Text>
       </View>
     );
@@ -104,47 +102,29 @@ export default function DirectoryScreen() {
         onPress={() => Linking.openURL(`tel:${emergency911.number}`)}
         style={{ alignItems: 'center', marginBottom: 20 }}
       >
-        <Image
-          source={emergency911.logo}
-          style={{ width: 200, height: 200, marginTop: -10, resizeMode: 'contain' }}
-        />
-        <Text style={{ fontSize: 25, fontWeight: 'bold', textAlign: 'center', marginTop: -5 }}>
-          {emergency911.name}
-        </Text>
+        <Image source={emergency911.logo} style={{ width: 200, height: 200, marginTop: -10, resizeMode: 'contain' }} />
+        <Text style={{ fontSize: 25, fontWeight: 'bold', textAlign: 'center', marginTop: -5 }}>{emergency911.name}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         onPress={() => Linking.openURL(`tel:${ocpoHotline.number}`)}
         style={{ alignItems: 'center', marginBottom: 30 }}
       >
-        <Image
-          source={ocpoHotline.logo}
-          style={{ width: 160, height: 160, resizeMode: 'contain' }}
-        />
-        <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginTop: -30 }}>
-          {ocpoHotline.name}
-        </Text>
+        <Image source={ocpoHotline.logo} style={{ width: 160, height: 160, resizeMode: 'contain' }} />
+        <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginTop: -30 }}>{ocpoHotline.name}</Text>
       </TouchableOpacity>
 
-      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 30, marginTop: 20 }}>
-        POLICE STATIONS
-      </Text>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginBottom: 30, marginTop: 20 }}>POLICE STATIONS</Text>
       {renderGrid(policeStations)}
 
-      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginVertical: 10, marginTop: 50, marginBottom: 30 }}>
-        OTHER EMERGENCY HOTLINES
-      </Text>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginVertical: 10, marginTop: 50, marginBottom: 30 }}>OTHER EMERGENCY HOTLINES</Text>
       {renderGrid(otherHotlines)}
 
-      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginVertical: 10, marginTop: 50, marginBottom: 30 }}>
-        BARANGAYS
-      </Text>
+      <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginVertical: 10, marginTop: 50, marginBottom: 30 }}>BARANGAYS</Text>
       {renderGrid(barangays)}
 
       <View style={{ marginTop: 30, marginBottom: -5, alignItems: 'center' }}>
-        <Text style={{ fontSize: 12, color: '#666', textAlign: 'center' }}>
-          © 2025 Olongapo City Police Hotline App. All rights reserved.
-        </Text>
+        <Text style={{ fontSize: 12, color: '#666', textAlign: 'center' }}>© 2025 Olongapo City Police Hotline App. All rights reserved.</Text>
       </View>
     </ScrollView>
   );

@@ -27,11 +27,8 @@ export default function AuthScreen({ navigation }) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // Address Modal State
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [searchBarangay, setSearchBarangay] = useState('');
-
-  // Form States
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -39,14 +36,16 @@ export default function AuthScreen({ navigation }) {
   const [street, setStreet] = useState('');
   const [contact, setContact] = useState('');
 
-  // --- AUTO LOGIN LOGIC ---
   useEffect(() => {
+    console.log("Checking auth status..."); // Dagdag mo ito
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        // ERROR FIX: Pinalitan ang 'Dashboard' ng 'ServicesScreen' base sa iyong project structure
-        navigation.replace('ServicesScreen');
+        console.log("User detected:", user.email); // Makikita mo ito sa terminal kung logged in
+        navigation.replace('DirectoryScreen');
+      } else {
+        console.log("No user session found.");
+        setIsCheckingAuth(false);
       }
-      setIsCheckingAuth(false);
     });
     return unsubscribe;
   }, []);

@@ -6,7 +6,7 @@ import { auth, db } from '../firebaseConfig';
 import { doc, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ navigation }) {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -31,8 +31,13 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleLogout = () => {
-    signOut(auth);
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      // Kapag nag-logout, babalik sa AuthScreen dahil sa onAuthStateChanged logic natin
+    } catch (error) {
+      console.log("Logout Error:", error);
+    }
   };
 
   if (loading) return <ActivityIndicator style={{flex:1}} size="large" color="#0047AB" />;
@@ -48,12 +53,10 @@ export default function ProfileScreen() {
             <Ionicons name="call-outline" size={16} color="#666" />
             <Text style={styles.infoText}>{userData?.phoneNumber || "No number"}</Text>
           </View>
-
           <View style={styles.infoRow}>
             <Ionicons name="location-outline" size={16} color="#666" />
             <Text style={styles.infoText}>{userData?.address || "No address"}</Text>
           </View>
-
           <View style={styles.infoRow}>
             <Ionicons name="mail-outline" size={16} color="#666" />
             <Text style={styles.infoText}>{userData?.email || auth.currentUser?.email}</Text>
@@ -81,7 +84,7 @@ const styles = StyleSheet.create({
   profileCard: { backgroundColor: '#fff', margin: 15, borderRadius: 15, padding: 20, alignItems: 'center' },
   userName: { fontSize: 20, fontWeight: 'bold', marginTop: 10, color: '#333' },
   infoList: { marginTop: 15, width: '100%' },
-  infoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 }, // Flex row para sa icon at text
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
   infoText: { fontSize: 14, color: '#555', marginLeft: 10 },
   qrCard: { backgroundColor: '#fff', marginHorizontal: 15, borderRadius: 15, padding: 20, alignItems: 'center' },
   menuCard: { backgroundColor: '#fff', margin: 15, borderRadius: 15, paddingVertical: 10 },

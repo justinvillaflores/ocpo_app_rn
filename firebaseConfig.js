@@ -18,25 +18,20 @@ const firebaseConfig = {
     measurementId: "G-2QX38MF8F5"
 };
 
+// Initialize Firebase App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Auth Persistence - Sinisiguro nito na isang beses lang mag-login
+// Initialize Auth with Persistence
 let auth;
-if (getApps().length > 0) {
-    try {
-        auth = getAuth(app);
-    } catch (e) {
-        auth = initializeAuth(app, {
-            persistence: getReactNativePersistence(AsyncStorage)
-        });
-    }
-} else {
+try {
+    auth = getAuth(app);
+} catch (e) {
     auth = initializeAuth(app, {
         persistence: getReactNativePersistence(AsyncStorage)
     });
 }
 
-// Firestore with Offline Persistence
+// Initialize Firestore with Local Cache for Offline Support
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache()
 });
