@@ -7,12 +7,11 @@ import { Search, Shield, Send, Plus, ChevronLeft, Building2, WifiOff } from 'luc
 import * as ImagePicker from 'expo-image-picker';
 import * as SMS from 'expo-sms';
 import NetInfo from '@react-native-community/netinfo';
-import * as Location from 'expo-location';
 
 import { db, auth, storage } from '../firebaseConfig';
 import {
   collection, query, where, onSnapshot, orderBy,
-  addDoc, serverTimestamp, doc, setDoc, getDoc, updateDoc, getDocs, limit
+  addDoc, serverTimestamp, doc, setDoc, getDoc, limit
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -24,6 +23,7 @@ export default function MessagesScreen() {
   const [messageText, setMessageText] = useState("");
   const [uploading, setUploading] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
 
   const [responders, setResponders] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -33,51 +33,58 @@ export default function MessagesScreen() {
 
   const flatListRef = useRef(null);
 
+  // Connection & Auth Listener
   useEffect(() => {
     const unsubscribeNet = NetInfo.addEventListener(state => {
-      setIsConnected(state.isConnected);
+      setIsConnected(state.isConnected ?? true);
     });
+
     const unsubscribeAuth = onAuthStateChanged(auth, (authenticatedUser) => {
-      if (authenticatedUser) setUser(authenticatedUser);
-      else { setUser(null); setLoading(false); }
+      setUser(authenticatedUser);
+      if (!authenticatedUser) setLoading(false);
     });
-    return () => { unsubscribeNet(); unsubscribeAuth(); };
+
+    return () => {
+      unsubscribeNet();
+      unsubscribeAuth();
+    };
   }, []);
 
+  // Fetch Current User Profile
   useEffect(() => {
-    const initSetup = async () => {
-      if (user) {
-        try {
-          const userDoc = await getDoc(doc(db, "users", user.uid));
+    if (user) {
+      getDoc(doc(db, "users", user.uid))
+        .then(userDoc => {
           if (userDoc.exists()) {
             setCurrentUserName(userDoc.data().username || userDoc.data().name || "Citizen User");
           }
-        } catch (e) { console.log("Profile load error:", e); }
-      }
-    };
-    initSetup();
+        })
+        .catch(e => console.log("Profile error:", e));
+    }
   }, [user]);
 
+  // Real-time Responders List with Offline Cache support
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, "users"), where("role", "==", "responder"));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
       const responderList = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       setResponders(responderList);
+      setIsOfflineMode(snapshot.metadata.fromCache);
       setLoading(false);
-    }, async (error) => {
-      const querySnapshot = await getDocs(q);
-      setResponders(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.error("Firestore error:", error);
       setLoading(false);
     });
 
     return () => unsubscribe();
   }, [user]);
 
+  // Real-time Messages Listener
   useEffect(() => {
     if (inChat && selectedContact && user) {
       const chatId = [user.uid, selectedContact.id].sort().join('_');
@@ -96,63 +103,92 @@ export default function MessagesScreen() {
 
     const isAvailable = await SMS.isAvailableAsync();
     if (isAvailable) {
-      const smsBody = `[OneCall EMERGENCY]\nFrom: ${currentUserName}\nMessage: ${textToSend}`;
-
+      const smsBody = `[OneCall EMERGENCY]\nFrom: ${currentUserName}\nMsg: ${textToSend}`;
       const { result } = await SMS.sendSMSAsync([phoneNumber], smsBody);
       if (result === 'sent') {
         setMessageText("");
-        Alert.alert("Success", "Emergency SMS has been sent.");
       }
     } else {
-      Alert.alert("SMS Error", "Your device does not support SMS.");
+      Alert.alert("SMS Error", "SMS services are not available on this device.");
     }
   };
 
   const handleAction = async () => {
     if (!messageText.trim() || !selectedContact || !user) return;
 
-    // Trigger SMS mode if offline
     if (!isConnected) {
       Alert.alert(
-        "Offline Mode",
-        "You are currently offline. Use SMS for this emergency?",
+        "Offline",
+        "You are offline. Send via SMS instead?",
         [
           { text: "Cancel", style: "cancel" },
-          { text: "Send via SMS", onPress: () => handleSendSMS(messageText) }
+          { text: "Send SMS", onPress: () => handleSendSMS(messageText) }
         ]
       );
       return;
     }
 
-    // Online: Firestore Logic
     const chatId = [user.uid, selectedContact.id].sort().join('_');
     const chatRef = doc(db, "chats", chatId);
-    const tempMsg = messageText;
+    const msgData = {
+      text: messageText,
+      senderId: user.uid,
+      receiverId: selectedContact.id,
+      createdAt: serverTimestamp(),
+    };
+
     setMessageText("");
 
     try {
       await setDoc(chatRef, {
-        lastMessage: tempMsg,
+        lastMessage: msgData.text,
         updatedAt: serverTimestamp(),
         participants: [user.uid, selectedContact.id],
         citizenName: currentUserName,
         responderName: selectedContact.name || selectedContact.username || "Responder"
       }, { merge: true });
 
-      await addDoc(collection(db, "chats", chatId, "messages"), {
-        text: tempMsg,
-        senderId: user.uid,
-        receiverId: selectedContact.id,
-        createdAt: serverTimestamp(),
-      });
+      await addDoc(collection(db, "chats", chatId, "messages"), msgData);
     } catch (error) {
-      handleSendSMS(tempMsg); // Auto-fallback to SMS if Firestore fails
+      handleSendSMS(msgData.text);
     }
   };
 
   const handlePickImage = async () => {
-    if (!isConnected) return Alert.alert("Offline", "Photos require an internet connection.");
-    // ... (Keep existing image picker logic)
+    if (!isConnected) return Alert.alert("Offline", "Uploading photos requires internet.");
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.6,
+    });
+
+    if (!result.canceled) {
+      uploadImage(result.assets[0].uri);
+    }
+  };
+
+  const uploadImage = async (uri) => {
+    setUploading(true);
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const storageRef = ref(storage, `chat_uploads/${user.uid}_${Date.now()}`);
+      await uploadBytes(storageRef, blob);
+      const url = await getDownloadURL(storageRef);
+
+      const chatId = [user.uid, selectedContact.id].sort().join('_');
+      await addDoc(collection(db, "chats", chatId, "messages"), {
+        image: url,
+        text: "",
+        senderId: user.uid,
+        receiverId: selectedContact.id,
+        createdAt: serverTimestamp(),
+      });
+    } catch (e) {
+      Alert.alert("Error", "Failed to upload image.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const filteredResponders = responders.filter(item =>
@@ -176,7 +212,12 @@ export default function MessagesScreen() {
             <View style={styles.iconCircle}><Shield size={20} color="#3B82F6" /></View>
             <View>
                 <Text style={styles.headerTitle}>Emergency Responders</Text>
-                {!isConnected && <Text style={{fontSize: 10, color: '#EF4444', fontWeight: 'bold'}}>OFFLINE MODE ACTIVE</Text>}
+                {(isOfflineMode || !isConnected) && (
+                  <View style={styles.offlineBadge}>
+                    <WifiOff size={10} color="#EF4444" />
+                    <Text style={styles.offlineText}>OFFLINE MODE</Text>
+                  </View>
+                )}
             </View>
           </View>
           <View style={styles.searchBar}>
@@ -196,6 +237,7 @@ export default function MessagesScreen() {
               </View>
             </TouchableOpacity>
           )}
+          ListEmptyComponent={<Text style={styles.emptyText}>No responders available offline.</Text>}
         />
       </SafeAreaView>
     );
@@ -210,12 +252,9 @@ export default function MessagesScreen() {
             <ResponderLogo url={selectedContact?.imageUrl} size={35} />
             <View>
               <Text style={styles.chatTitle}>{selectedContact?.name || selectedContact?.username}</Text>
-              <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                {isConnected ? <Text style={styles.onlineDot}>●</Text> : <WifiOff size={12} color="#EF4444" />}
-                <Text style={[styles.chatStatus, { color: isConnected ? '#10B981' : '#EF4444' }]}>
-                   {isConnected ? 'Connected' : 'Offline - SMS Mode'}
-                </Text>
-              </View>
+              <Text style={[styles.chatStatus, { color: isConnected ? '#10B981' : '#EF4444' }]}>
+                {isConnected ? '● Online' : 'Offline - SMS Active'}
+              </Text>
             </View>
           </View>
         </View>
@@ -229,7 +268,7 @@ export default function MessagesScreen() {
         contentContainerStyle={{ padding: 15 }}
         renderItem={({ item }) => (
           <View style={item.senderId === user?.uid ? styles.msgSent : styles.msgReceived}>
-            {item.image && <Image source={{ uri: item.image }} style={styles.msgImage} resizeMode="cover" />}
+            {item.image && <Image source={{ uri: item.image }} style={styles.msgImage} />}
             {item.text !== "" && <Text style={item.senderId === user?.uid ? styles.msgTextSent : styles.msgText}>{item.text}</Text>}
           </View>
         )}
@@ -237,19 +276,16 @@ export default function MessagesScreen() {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.inputArea}>
-          <TouchableOpacity onPress={handlePickImage} disabled={uploading || !isConnected}>
-            {uploading ? <ActivityIndicator size="small" color="#3B82F6" /> : <Plus size={24} color={isConnected ? "#3B82F6" : "#CBD5E1"} />}
+          <TouchableOpacity onPress={handlePickImage} disabled={uploading}>
+            {uploading ? <ActivityIndicator size="small" /> : <Plus size={24} color="#3B82F6" />}
           </TouchableOpacity>
           <TextInput
-            placeholder={isConnected ? "Type a message..." : "Send Emergency SMS..."}
+            placeholder="Type message..."
             style={styles.chatInput}
             value={messageText}
             onChangeText={setMessageText}
           />
-          <TouchableOpacity
-            style={[styles.sendBtn, { backgroundColor: isConnected ? '#3B82F6' : '#EF4444' }]}
-            onPress={handleAction}
-          >
+          <TouchableOpacity style={[styles.sendBtn, { backgroundColor: isConnected ? '#3B82F6' : '#EF4444' }]} onPress={handleAction}>
             <Send size={18} color="white" />
           </TouchableOpacity>
         </View>
@@ -259,29 +295,31 @@ export default function MessagesScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'white' },
+  container: { flex: 1, backgroundColor: '#FFFFFF' },
   header: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  headerTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  iconCircle: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '800' },
-  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 15, borderRadius: 12, height: 45 },
-  searchInput: { flex: 1, marginLeft: 10 },
-  contactItem: { flexDirection: 'row', padding: 20, borderBottomWidth: 1, borderBottomColor: '#F8FAFC', alignItems: 'center', gap: 15 },
+  headerTop: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 15 },
+  iconCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B' },
+  offlineBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  offlineText: { fontSize: 10, color: '#EF4444', fontWeight: 'bold' },
+  searchBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9', paddingHorizontal: 12, borderRadius: 10, height: 40 },
+  searchInput: { flex: 1, marginLeft: 8, fontSize: 14 },
+  contactItem: { flexDirection: 'row', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F8FAFC', alignItems: 'center', gap: 12 },
   contactIcon: { backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
-  avatarImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-  contactName: { fontSize: 15, fontWeight: '700' },
+  avatarImage: { width: '100%', height: '100%' },
+  contactName: { fontSize: 15, fontWeight: '700', color: '#334155' },
   contactSub: { fontSize: 12, color: '#94A3B8' },
-  chatHeader: { flexDirection: 'row', alignItems: 'center', padding: 15, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  chatHeaderInfo: { flex: 1, marginLeft: 10 },
-  chatTitle: { fontSize: 16, fontWeight: '700' },
+  emptyText: { textAlign: 'center', marginTop: 40, color: '#94A3B8' },
+  chatHeader: { flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  chatHeaderInfo: { flex: 1, marginLeft: 5 },
+  chatTitle: { fontSize: 15, fontWeight: '700' },
   chatStatus: { fontSize: 11, fontWeight: '600' },
-  onlineDot: { color: '#10B981', fontSize: 12 },
-  msgReceived: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 18, maxWidth: '75%', marginBottom: 15, alignSelf: 'flex-start' },
-  msgSent: { backgroundColor: '#3B82F6', padding: 12, borderRadius: 18, maxWidth: '75%', alignSelf: 'flex-end', marginBottom: 15 },
-  msgText: { fontSize: 14, color: '#1E293B', lineHeight: 20 },
-  msgTextSent: { fontSize: 14, color: 'white', lineHeight: 20 },
-  msgImage: { width: 200, height: 200, borderRadius: 12, marginBottom: 5 },
-  inputArea: { flexDirection: 'row', alignItems: 'center', padding: 15, gap: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', backgroundColor: 'white' },
-  chatInput: { flex: 1, backgroundColor: '#F1F5F9', borderRadius: 25, height: 45, paddingHorizontal: 20 },
-  sendBtn: { width: 45, height: 45, borderRadius: 22.5, justifyContent: 'center', alignItems: 'center' }
+  msgReceived: { backgroundColor: '#F1F5F9', padding: 12, borderRadius: 15, maxWidth: '80%', marginBottom: 10, alignSelf: 'flex-start' },
+  msgSent: { backgroundColor: '#3B82F6', padding: 12, borderRadius: 15, maxWidth: '80%', alignSelf: 'flex-end', marginBottom: 10 },
+  msgText: { color: '#1E293B' },
+  msgTextSent: { color: '#FFFFFF' },
+  msgImage: { width: 200, height: 150, borderRadius: 10, marginBottom: 5 },
+  inputArea: { flexDirection: 'row', alignItems: 'center', padding: 10, gap: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  chatInput: { flex: 1, backgroundColor: '#F1F5F9', borderRadius: 20, paddingHorizontal: 15, height: 40 },
+  sendBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' }
 });

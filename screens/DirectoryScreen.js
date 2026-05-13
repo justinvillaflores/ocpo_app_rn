@@ -6,20 +6,29 @@ import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 export default function DirectoryScreen() {
   const [hotlines, setHotlines] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
+    // 1. Query setup
     const q = query(collection(db, "hotlines"), orderBy("name", "asc"));
 
+    // 2. onSnapshot with metadata tracking
     const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
+
       setHotlines(data);
+
+      // I-check kung galing sa cache (offline) o server (online) ang data
+      const fromCache = snapshot.metadata.fromCache;
+      setIsOffline(fromCache);
+
+      // I-set loading to false agad kahit galing sa cache para makita ang listahan
       setLoading(false);
 
-      const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
-      console.log("Directory loaded from:", source);
+      console.log("Directory loaded from:", fromCache ? "Local Cache (Offline Mode)" : "Server");
     }, (error) => {
       console.error("Firestore Error:", error);
       setLoading(false);
@@ -28,10 +37,12 @@ export default function DirectoryScreen() {
     return () => unsubscribe();
   }, []);
 
+  // Filter categories
   const policeStations = hotlines.filter(h => h.category === 'Police');
   const barangays = hotlines.filter(h => h.category === 'Barangay');
   const otherHotlines = hotlines.filter(h => h.category === 'Other');
 
+  // Static items
   const emergency911 = { name: '911', number: '911', logo: require('../assets/paynal_911.png') };
   const ocpoHotline = { name: 'Olongapo CPO', number: '09985985546', logo: require('../assets/OCPO.png') };
 
@@ -88,6 +99,15 @@ export default function DirectoryScreen() {
       style={{ flex: 1, paddingHorizontal: 20, paddingTop: 70, backgroundColor: '#fff' }}
       contentContainerStyle={{ paddingBottom: 100 }}
     >
+      {/* Offline Indicator Hook */}
+      {isOffline && (
+        <View style={{ backgroundColor: '#FF8C00', padding: 5, borderRadius: 5, marginBottom: 10 }}>
+          <Text style={{ color: '#fff', textAlign: 'center', fontSize: 10, fontWeight: 'bold' }}>
+            OFFLINE MODE - USING CACHED DATA
+          </Text>
+        </View>
+      )}
+
       <View style={{ alignItems: 'center', marginBottom: 10, marginTop: -20, }}>
         <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'center' }}>
           Welcome to <Text style={{ color: '#000' }}>Olongapo City Emergency Hotlines</Text>

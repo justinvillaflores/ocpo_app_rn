@@ -6,11 +6,11 @@ import {
 import {
   initializeFirestore,
   persistentLocalCache,
-  persistentMultipleTabManager
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+// Iyong existing config
 const firebaseConfig = {
     apiKey: "AIzaSyDtWsIszmQI_cRCFnD29a_jb72VDGchbwE",
     authDomain: "onecall-d0bf8.firebaseapp.com",
@@ -21,16 +21,16 @@ const firebaseConfig = {
     measurementId: "G-2QX38MF8F5"
 };
 
+// Initialize App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
+// Auth with AsyncStorage persistence para manatiling logged in kahit i-close ang app
 const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage)
 });
 
 const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({
-    tabManager: persistentMultipleTabManager()
-  })
+  localCache: persistentLocalCache({})
 });
 
 const storage = getStorage(app);

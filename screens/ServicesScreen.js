@@ -11,28 +11,40 @@ export default function ServicesScreen() {
 
   const [allData, setAllData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false); // Para ma-track kung offline data ang gamit
 
   useEffect(() => {
     const q = query(collection(db, "hotlines"), orderBy("name", "asc"));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+
+    // includeMetadataChanges: true ay kailangan para mabasa ang cache habang offline
+    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setAllData(data);
+
+      // I-check kung galing sa cache ang data
+      const fromCache = snapshot.metadata.fromCache;
+      setIsOffline(fromCache);
+
+      // I-stop ang loading agad kahit galing lang sa cache ang data
       setLoading(false);
+
+      console.log("Services loaded from:", fromCache ? "Local Cache (Offline)" : "Server");
     }, (error) => {
       console.error("Firebase Error:", error);
       setLoading(false);
     });
+
     return () => unsubscribe();
   }, []);
 
-  // 2. FILTER DATA BY YOUR NEW ADMIN CATEGORIES
+  // Filter Data
   const reportItems = allData.filter(item => item.category === 'Report');
   const servicesItems = allData.filter(item => item.category === 'Services');
   const pagesItems = allData.filter(item => item.category === 'Pages');
   const otherPagesItems = allData.filter(item => item.category === 'Other Pages');
   const cctvItems = allData.filter(item => item.category === 'Olongapo City CCTV Live Stream One');
 
-  // Feedback Logic (Keep as is)
+  // Feedback Logic
   const badWords = ['putangina', 'puta', 'gago', 'tanga', 'bobo', 'ulol', 'leche', 'pakyu', 'siraulo', 'ggo', 'b0b0', 't4ngina', 'put4ngina', 'put4', 'pakyu', 'bcbc', 'bwisit', 'ul*l', 'bugok', 'bisakol', 'amp', 'nigger', 'bakal', 'yawa', 'putang ina', '8080', 'lawrence'];
   const hasBadWords = (text) => {
     const normalized = text.toLowerCase().replace(/4/g, 'a').replace(/@/g, 'a').replace(/0/g, 'o').replace(/1/g, 'l').replace(/3/g, 'e').replace(/\*/g, '').replace(/ /g, '');
@@ -40,6 +52,7 @@ export default function ServicesScreen() {
   };
 
   const submitFeedback = async () => {
+    // Check connection first if possible (optional)
     const ratingNumber = parseInt(rating);
     if (isNaN(ratingNumber) || ratingNumber < 1 || ratingNumber > 5) return alert('Please enter a valid rating between 1 and 5.');
     if (!comment.trim()) return alert('Please enter your comment or suggestion.');
@@ -49,10 +62,12 @@ export default function ServicesScreen() {
       const formData = new FormData();
       formData.append('entry.1309731542', rating);
       formData.append('entry.17557046', comment);
-      await fetch('https://docs.google.com/forms/d/e/1FAIpQLSdoJqDVaQNQxx_L4dl4cTFNB2tLWA2L2oNpI7s5yLR5sDJ4Fw/formResponse', { method: 'POST', body: formData });
+      await fetch('https://docs.google.com/forms/e/1FAIpQLSdoJqDVaQNQxx_L4dl4cTFNB2tLWA2L2oNpI7s5yLR5sDJ4Fw/formResponse', { method: 'POST', body: formData });
       setRating(''); setComment(''); setModalVisible(false);
       alert('Thank you for your feedback!');
-    } catch (error) { alert('Connection lost. Please try again.'); }
+    } catch (error) {
+      alert('Feedback requires internet connection. Please try again later.');
+    }
   };
 
   const renderGrid = (data, columns = 3) => {
@@ -74,7 +89,7 @@ export default function ServicesScreen() {
                   item.category === 'Olongapo City CCTV Live Stream One' && { width: 150, height: 150, borderRadius: 15, marginLeft: 230 }
                 ]}
               />
-              <Text style={item.category === 'Olongapo City CCTV Live Stream One' ? { fontSize: 16, fontWeight: 'bold', marginLeft: 280, width: 150 } : { fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>
+              <Text style={item.category === 'Olongapo City CCTV Live Stream One' ? { fontSize: 14, fontWeight: 'bold', marginLeft: 280, width: 150 } : { fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>
                 {item.name}
               </Text>
             </TouchableOpacity>
@@ -85,11 +100,19 @@ export default function ServicesScreen() {
   };
 
   if (loading) {
-    return <View style={{flex:1, justifyContent:'center'}}><ActivityIndicator size="large" color="#0000ff" /></View>;
+    return <View style={{flex:1, justifyContent:'center', backgroundColor: '#fff'}}><ActivityIndicator size="large" color="#0047AB" /><Text style={{textAlign:'center', marginTop:10}}>Loading Services...</Text></View>;
   }
 
   return (
-    <ScrollView style={{ flex: 1, paddingHorizontal: 20, paddingTop: 5 }} contentContainerStyle={{ paddingBottom: 100 }}>
+    <ScrollView style={{ flex: 1, paddingHorizontal: 20, paddingTop: 5, backgroundColor: '#fff' }} contentContainerStyle={{ paddingBottom: 100 }}>
+
+      {/* Offline Indicator gaya ng sa Directory */}
+      {isOffline && (
+        <View style={{ backgroundColor: '#6c757d', padding: 5, borderRadius: 5, marginTop: 10 }}>
+          <Text style={{ color: '#fff', textAlign: 'center', fontSize: 10, fontWeight: 'bold' }}>OFFLINE MODE - CACHED DATA</Text>
+        </View>
+      )}
+
       <View style={{ width: '100%', height: 180, borderRadius: 10, overflow: 'hidden', marginBottom: 5 }}>
         <Image source={require('../assets/ocposervices.png')} style={{ width: '105%', height: '105%', resizeMode: 'contain' }} />
       </View>
@@ -133,13 +156,14 @@ export default function ServicesScreen() {
         <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Give Feedback</Text>
       </TouchableOpacity>
 
+      {/* Feedback Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={serviceStyles.modalOverlay}><View style={serviceStyles.feedbackModal}><ScrollView contentContainerStyle={{ padding: 20 }}>
           <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 15 }}>Submit Feedback</Text>
           <Text style={{ fontSize: 14 }}>Rate the App (1 to 5):</Text>
-          <TextInput value={rating} onChangeText={setRating} keyboardType="numeric" style={serviceStyles.input} />
+          <TextInput value={rating} onChangeText={setRating} keyboardType="numeric" style={serviceStyles.input} placeholder="e.g. 5" />
           <Text style={{ fontSize: 14, marginTop: 15 }}>Your Suggestion:</Text>
-          <TextInput value={comment} onChangeText={setComment} multiline style={[serviceStyles.input, { height: 100, textAlignVertical: 'top' }]} />
+          <TextInput value={comment} onChangeText={setComment} multiline style={[serviceStyles.input, { height: 100, textAlignVertical: 'top' }]} placeholder="Tell us what you think..." />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 30 }}>
             <TouchableOpacity onPress={() => setModalVisible(false)} style={[serviceStyles.button, { backgroundColor: 'gray' }]}><Text style={serviceStyles.buttonText}>Cancel</Text></TouchableOpacity>
             <TouchableOpacity onPress={submitFeedback} style={[serviceStyles.button, { backgroundColor: '#0d6efd' }]}><Text style={serviceStyles.buttonText}>Submit</Text></TouchableOpacity>
@@ -147,6 +171,7 @@ export default function ServicesScreen() {
         </ScrollView></View></View>
       </Modal>
 
+      {/* Warning Modal */}
       <Modal visible={warningVisible} animationType="fade" transparent={true}>
         <View style={serviceStyles.modalOverlay}><View style={[serviceStyles.feedbackModal, { padding: 20, alignItems: 'center' }]}>
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: 'red', marginBottom: 10 }}>System Breach Detected!</Text>
@@ -160,13 +185,13 @@ export default function ServicesScreen() {
 
 const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: 'bold', marginBottom: 20, marginTop: 20 },
-  feedbackBtn: { backgroundColor: '#0d6efd', paddingVertical: 10, borderRadius: 8, marginTop: 100, marginBottom: -50, alignItems: 'center' }
+  feedbackBtn: { backgroundColor: '#0d6efd', paddingVertical: 12, borderRadius: 8, marginTop: 80, marginBottom: 20, alignItems: 'center' }
 });
 
 const serviceStyles = StyleSheet.create({
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   feedbackModal: { backgroundColor: '#fff', borderRadius: 15, width: '90%', maxHeight: '80%' },
-  input: { borderColor: 'gray', borderWidth: 1, padding: 10, marginTop: 10, borderRadius: 6 },
+  input: { borderColor: '#ddd', borderWidth: 1, padding: 10, marginTop: 10, borderRadius: 6 },
   button: { paddingHorizontal: 25, paddingVertical: 12, borderRadius: 8 },
   buttonText: { color: '#fff', fontWeight: 'bold' },
 });
