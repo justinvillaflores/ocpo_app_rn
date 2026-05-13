@@ -10,7 +10,6 @@ import {
 import { getStorage } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// Iyong existing config
 const firebaseConfig = {
     apiKey: "AIzaSyDtWsIszmQI_cRCFnD29a_jb72VDGchbwE",
     authDomain: "onecall-d0bf8.firebaseapp.com",
@@ -24,7 +23,6 @@ const firebaseConfig = {
 // Initialize App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Auth with AsyncStorage persistence para manatiling logged in kahit i-close ang app
 const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage)
 });

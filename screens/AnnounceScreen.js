@@ -91,7 +91,6 @@ export default function AnnounceScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" />
       <View style={styles.header}>
-        {/* BINAGO: Mula Public Bulletins tungo sa Official Advisories */}
         <Text style={styles.headerTitle}>Official Advisories</Text>
         <Text style={styles.headerSubtitle}>Verified updates from the Command Center</Text>
       </View>
@@ -136,7 +135,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   headerTitle: {
-    fontSize: 22, // Bahagyang adjusted para sa mas pormal na scale
+    fontSize: 22,
     fontWeight: '800',
     color: '#1E293B',
     letterSpacing: -0.5,

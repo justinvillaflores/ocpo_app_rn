@@ -11,21 +11,18 @@ export default function ServicesScreen() {
 
   const [allData, setAllData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isOffline, setIsOffline] = useState(false); // Para ma-track kung offline data ang gamit
+  const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
     const q = query(collection(db, "hotlines"), orderBy("name", "asc"));
 
-    // includeMetadataChanges: true ay kailangan para mabasa ang cache habang offline
     const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setAllData(data);
 
-      // I-check kung galing sa cache ang data
       const fromCache = snapshot.metadata.fromCache;
       setIsOffline(fromCache);
 
-      // I-stop ang loading agad kahit galing lang sa cache ang data
       setLoading(false);
 
       console.log("Services loaded from:", fromCache ? "Local Cache (Offline)" : "Server");
@@ -37,14 +34,12 @@ export default function ServicesScreen() {
     return () => unsubscribe();
   }, []);
 
-  // Filter Data
   const reportItems = allData.filter(item => item.category === 'Report');
   const servicesItems = allData.filter(item => item.category === 'Services');
   const pagesItems = allData.filter(item => item.category === 'Pages');
   const otherPagesItems = allData.filter(item => item.category === 'Other Pages');
   const cctvItems = allData.filter(item => item.category === 'Olongapo City CCTV Live Stream One');
 
-  // Feedback Logic
   const badWords = ['putangina', 'puta', 'gago', 'tanga', 'bobo', 'ulol', 'leche', 'pakyu', 'siraulo', 'ggo', 'b0b0', 't4ngina', 'put4ngina', 'put4', 'pakyu', 'bcbc', 'bwisit', 'ul*l', 'bugok', 'bisakol', 'amp', 'nigger', 'bakal', 'yawa', 'putang ina', '8080', 'lawrence'];
   const hasBadWords = (text) => {
     const normalized = text.toLowerCase().replace(/4/g, 'a').replace(/@/g, 'a').replace(/0/g, 'o').replace(/1/g, 'l').replace(/3/g, 'e').replace(/\*/g, '').replace(/ /g, '');
@@ -52,7 +47,6 @@ export default function ServicesScreen() {
   };
 
   const submitFeedback = async () => {
-    // Check connection first if possible (optional)
     const ratingNumber = parseInt(rating);
     if (isNaN(ratingNumber) || ratingNumber < 1 || ratingNumber > 5) return alert('Please enter a valid rating between 1 and 5.');
     if (!comment.trim()) return alert('Please enter your comment or suggestion.');
@@ -106,7 +100,6 @@ export default function ServicesScreen() {
   return (
     <ScrollView style={{ flex: 1, paddingHorizontal: 20, paddingTop: 5, backgroundColor: '#fff' }} contentContainerStyle={{ paddingBottom: 100 }}>
 
-      {/* Offline Indicator gaya ng sa Directory */}
       {isOffline && (
         <View style={{ backgroundColor: '#6c757d', padding: 5, borderRadius: 5, marginTop: 10 }}>
           <Text style={{ color: '#fff', textAlign: 'center', fontSize: 10, fontWeight: 'bold' }}>OFFLINE MODE - CACHED DATA</Text>
@@ -156,7 +149,6 @@ export default function ServicesScreen() {
         <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Give Feedback</Text>
       </TouchableOpacity>
 
-      {/* Feedback Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={serviceStyles.modalOverlay}><View style={serviceStyles.feedbackModal}><ScrollView contentContainerStyle={{ padding: 20 }}>
           <Text style={{ fontSize: 18, fontWeight: 'bold', marginBottom: 15 }}>Submit Feedback</Text>
@@ -171,7 +163,6 @@ export default function ServicesScreen() {
         </ScrollView></View></View>
       </Modal>
 
-      {/* Warning Modal */}
       <Modal visible={warningVisible} animationType="fade" transparent={true}>
         <View style={serviceStyles.modalOverlay}><View style={[serviceStyles.feedbackModal, { padding: 20, alignItems: 'center' }]}>
           <Text style={{ fontSize: 18, fontWeight: 'bold', color: 'red', marginBottom: 10 }}>System Breach Detected!</Text>

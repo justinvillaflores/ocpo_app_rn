@@ -52,13 +52,11 @@ export default function App() {
   useEffect(() => {
     const startup = async () => {
       try {
-        // 1. Check persistence for Notice
         const hasAgreed = await AsyncStorage.getItem('hasAgreedToNotice');
         if (hasAgreed !== 'true') {
           setShowNotice(true);
         }
 
-        // 2. Auth State Listener
         const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
           setUser(currentUser);
           setInitializing(false);

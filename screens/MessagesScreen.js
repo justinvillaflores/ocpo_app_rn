@@ -33,7 +33,6 @@ export default function MessagesScreen() {
 
   const flatListRef = useRef(null);
 
-  // Connection & Auth Listener
   useEffect(() => {
     const unsubscribeNet = NetInfo.addEventListener(state => {
       setIsConnected(state.isConnected ?? true);
@@ -50,7 +49,6 @@ export default function MessagesScreen() {
     };
   }, []);
 
-  // Fetch Current User Profile
   useEffect(() => {
     if (user) {
       getDoc(doc(db, "users", user.uid))
@@ -63,7 +61,6 @@ export default function MessagesScreen() {
     }
   }, [user]);
 
-  // Real-time Responders List with Offline Cache support
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, "users"), where("role", "==", "responder"));
@@ -84,7 +81,6 @@ export default function MessagesScreen() {
     return () => unsubscribe();
   }, [user]);
 
-  // Real-time Messages Listener
   useEffect(() => {
     if (inChat && selectedContact && user) {
       const chatId = [user.uid, selectedContact.id].sort().join('_');
