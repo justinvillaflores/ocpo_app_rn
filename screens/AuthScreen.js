@@ -25,7 +25,6 @@ export default function AuthScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
 
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [searchBarangay, setSearchBarangay] = useState('');
@@ -37,10 +36,8 @@ export default function AuthScreen({ navigation }) {
   const [contact, setContact] = useState('');
 
   useEffect(() => {
-    // FIXED: Titingnan muna ang local storage kung may user session na
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log("Offline Session Found:", user.email);
         navigation.replace('DirectoryScreen');
       } else {
         setIsCheckingAuth(false);
@@ -48,18 +45,6 @@ export default function AuthScreen({ navigation }) {
     });
     return unsubscribe;
   }, []);
-
-  const handleForgotPassword = async () => {
-    if (!email.trim()) {
-      return Alert.alert("Email Required", "Please enter your email address to reset your password.");
-    }
-    try {
-      await sendPasswordResetEmail(auth, email.trim());
-      Alert.alert("Password Reset", "A password reset link has been sent to your email.");
-    } catch (error) {
-      Alert.alert("Error", error.message);
-    }
-  };
 
   const handleAuth = async () => {
     const trimmedEmail = email.trim();
@@ -75,9 +60,9 @@ export default function AuthScreen({ navigation }) {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
       } else {
-        if (!contact.trim() || !barangay || !street.trim()) {
+        if (!contact.trim() || !barangay || !street.trim() || !username.trim()) {
           setLoading(false);
-          return Alert.alert("Required", "Please complete all fields including your full address.");
+          return Alert.alert("Required", "Please complete all fields.");
         }
 
         const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
@@ -96,21 +81,30 @@ export default function AuthScreen({ navigation }) {
           createdAt: new Date().toISOString()
         });
 
-        Alert.alert("Welcome!", "Account created successfully.");
+        Alert.alert("Success", "Account created!");
       }
     } catch (error) {
-      // Kung offline at walang session, dito lalabas ang error na nakita mo sa screenshot
       Alert.alert("Authentication Error", error.message);
     } finally {
       setLoading(false);
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email.trim()) return Alert.alert("Email Required", "Please enter your email.");
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      Alert.alert("Sent", "Check your email for the reset link.");
+    } catch (error) {
+      Alert.alert("Error", error.message);
+    }
+  };
+
   if (isCheckingAuth) {
     return (
-      <View style={[styles.container, { justifyContent: 'center' }]}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#003399" />
-        <Text style={{ marginTop: 10, color: '#003399' }}>Checking Session...</Text>
+        <Text style={styles.loadingText}>Loading OneCall...</Text>
       </View>
     );
   }
@@ -167,10 +161,7 @@ export default function AuthScreen({ navigation }) {
 
         {isLogin && (
           <View style={styles.optionsContainer}>
-            <TouchableOpacity style={styles.rememberMe} onPress={() => setRememberMe(!rememberMe)}>
-              <Ionicons name={rememberMe ? "checkbox" : "square-outline"} size={20} color={rememberMe ? "#0047AB" : "#666"} />
-              <Text style={styles.rememberText}>Stay logged in</Text>
-            </TouchableOpacity>
+            <Text style={styles.rememberText}>Stay logged in</Text>
             <TouchableOpacity onPress={handleForgotPassword}>
               <Text style={styles.forgotText}>Forgot Password?</Text>
             </TouchableOpacity>
@@ -217,6 +208,8 @@ export default function AuthScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: { flex: 1, backgroundColor: '#F8F9FA', justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 10, color: '#003399', fontWeight: 'bold' },
   container: { flexGrow: 1, backgroundColor: '#F8F9FA', alignItems: 'center', padding: 30, paddingTop: 80 },
   logoText: { fontSize: 32, fontWeight: 'bold', color: '#003399', marginBottom: 60 },
   welcomeTitle: { fontSize: 28, fontWeight: '900', color: '#003399' },
@@ -225,8 +218,7 @@ const styles = StyleSheet.create({
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', borderRadius: 12, paddingHorizontal: 15, marginBottom: 15, height: 55 },
   input: { flex: 1, marginLeft: 10, fontSize: 15 },
   optionsContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5 },
-  rememberMe: { flexDirection: 'row', alignItems: 'center' },
-  rememberText: { marginLeft: 8, fontSize: 13, color: '#666' },
+  rememberText: { fontSize: 13, color: '#666' },
   forgotText: { fontSize: 13, color: '#0047AB', fontWeight: 'bold' },
   mainButton: { backgroundColor: '#0047AB', borderRadius: 25, height: 55, justifyContent: 'center', alignItems: 'center', marginTop: 10 },
   buttonText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },

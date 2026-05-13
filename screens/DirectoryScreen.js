@@ -8,7 +8,6 @@ export default function DirectoryScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // FIXED: Ang listener ay tinitingnan ang cache para gumana kahit offline
     const q = query(collection(db, "hotlines"), orderBy("name", "asc"));
 
     const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {

@@ -12,13 +12,12 @@ import {
   ActivityIndicator
 } from 'react-native';
 
-// Firebase at Expo Location imports
 import { auth, db } from './firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import * as Location from 'expo-location';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Import ng iyong mga Screens
 import DirectoryScreen from './screens/DirectoryScreen';
 import ServicesScreen from './screens/ServicesScreen';
 import MessagesScreen from './screens/MessagesScreen';
@@ -30,7 +29,6 @@ import CustomTabBar from './CustomTabBar';
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Bottom Tab Navigation Setup
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -47,31 +45,43 @@ function MainTabs() {
 }
 
 export default function App() {
-  const [showNotice, setShowNotice] = useState(true);
+  const [showNotice, setShowNotice] = useState(false);
   const [user, setUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
 
   useEffect(() => {
-    // Persistent login: tinitingnan nito kung may naka-login na user pagka-bukas ng app
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (initializing) setInitializing(false);
+    const startup = async () => {
+      try {
+        // 1. Check persistence for Notice
+        const hasAgreed = await AsyncStorage.getItem('hasAgreedToNotice');
+        if (hasAgreed !== 'true') {
+          setShowNotice(true);
+        }
 
-      if (currentUser) {
-        startLocationTracking(currentUser.uid);
+        // 2. Auth State Listener
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+          setUser(currentUser);
+          setInitializing(false);
+
+          if (currentUser) {
+            startLocationTracking(currentUser.uid);
+          }
+        });
+
+        return unsubscribe;
+      } catch (e) {
+        console.log("Startup Error: ", e);
+        setInitializing(false);
       }
-    });
-    return unsubscribe;
-  }, [initializing]);
+    };
 
-  // Real-time location tracking logic
+    startup();
+  }, []);
+
   const startLocationTracking = async (uid) => {
     try {
       let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.log("Location permission denied");
-        return;
-      }
+      if (status !== 'granted') return;
 
       await Location.watchPositionAsync(
         {
@@ -100,7 +110,10 @@ export default function App() {
     }
   };
 
-  const handleAgree = () => setShowNotice(false);
+  const handleAgree = async () => {
+    await AsyncStorage.setItem('hasAgreedToNotice', 'true');
+    setShowNotice(false);
+  };
 
   if (initializing) {
     return (
@@ -116,63 +129,50 @@ export default function App() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
-
               <Text style={styles.modalTitle}>Notice to the Public</Text>
-
               <Text style={styles.modalText}>
                 Welcome to the <Text style={styles.bold}>Olongapo City Hotlines</Text> mobile application.
                 Before you proceed, please read and understand the following disclaimer:
               </Text>
-
               <Text style={styles.modalText}>
                 <Text style={styles.bold}>Developed with purpose. Built for public safety.</Text>{'\n'}
                 A collaboration between Computer Science students from Gordon College and the Olongapo City Police Office — serving the community through technology.
               </Text>
-
               <Text style={styles.modalText}>
                 1. <Text style={styles.bold}>General Information:</Text> The Olongapo City Hotlines mobile application is developed to provide fast and convenient access to key emergency contact numbers and essential public service hotlines in Olongapo City. The information in this app is intended for general guidance only. While we strive to keep all information accurate and up to date, we do not guarantee its completeness or real-time reliability.
               </Text>
-
               <Text style={styles.modalText}>
                 2. <Text style={styles.bold}>Service Limitations:</Text> Some services and features within the app may be limited due to external factors such as internet connection, device performance, or third-party services. While most features are accessible offline, certain components (like feedback or future updates) may require internet access and may be subject to change without prior notice.
               </Text>
-
               <Text style={styles.modalText}>
                 3. <Text style={styles.bold}>Third-Party Content and Websites:</Text> This app may contain links or references to external websites and services not controlled by the developers or the Olongapo City Police Office. We do not take responsibility for the content, policies, or accuracy of any third-party services. Users should review their terms and privacy policies independently.
               </Text>
-
               <Text style={styles.modalText}>
                 4. <Text style={styles.bold}>Personal Safety and Emergency Use:</Text> The Olongapo City Hotlines app is not a replacement for official emergency hotlines. In case of urgent or life-threatening situations, always call emergency numbers directly. The app is designed as a support tool, and we are not liable for actions or decisions made solely based on the app’s content.
               </Text>
-
               <Text style={styles.modalText}>
                 5. <Text style={styles.bold}>Data Privacy:</Text> Your privacy is important. Any data voluntarily submitted through the app (e.g., feedback or suggestions) is handled in accordance with applicable privacy laws and solely for improving public service and system quality.
               </Text>
-
               <Text style={styles.acceptText}>
                 By using the Olongapo City Hotlines mobile application, you acknowledge that you have read and understood this disclaimer. If you do not agree with any part of this notice, please refrain from using the app. Your continued use implies acceptance of the terms stated herein.
               </Text>
-
               <TouchableOpacity style={styles.agreeButton} onPress={handleAgree}>
                 <Text style={styles.agreeText}>I agree</Text>
               </TouchableOpacity>
-
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      {!showNotice && (
-        <NavigationContainer>
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
-            {user ? (
-              <Stack.Screen name="MainApp" component={MainTabs} />
-            ) : (
-              <Stack.Screen name="Auth" component={AuthScreen} />
-            )}
-          </Stack.Navigator>
-        </NavigationContainer>
-      )}
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          {user ? (
+            <Stack.Screen name="MainApp" component={MainTabs} />
+          ) : (
+            <Stack.Screen name="Auth" component={AuthScreen} />
+          )}
+        </Stack.Navigator>
+      </NavigationContainer>
     </>
   );
 }

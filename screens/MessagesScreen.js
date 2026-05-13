@@ -33,7 +33,6 @@ export default function MessagesScreen() {
 
   const flatListRef = useRef(null);
 
-  // 1. Connection & Auth Watcher
   useEffect(() => {
     const unsubscribeNet = NetInfo.addEventListener(state => {
       setIsConnected(state.isConnected);
@@ -45,7 +44,6 @@ export default function MessagesScreen() {
     return () => { unsubscribeNet(); unsubscribeAuth(); };
   }, []);
 
-  // 2. Load Profile
   useEffect(() => {
     const initSetup = async () => {
       if (user) {
@@ -60,7 +58,6 @@ export default function MessagesScreen() {
     initSetup();
   }, [user]);
 
-  // 3. Responders List (Offline-Ready via Firestore Cache)
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, "users"), where("role", "==", "responder"));
@@ -73,7 +70,6 @@ export default function MessagesScreen() {
       setResponders(responderList);
       setLoading(false);
     }, async (error) => {
-      // Fallback: Kahit may error (offline), susubukan pa rin kunin sa local cache
       const querySnapshot = await getDocs(q);
       setResponders(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
@@ -82,7 +78,6 @@ export default function MessagesScreen() {
     return () => unsubscribe();
   }, [user]);
 
-  // 4. Chat Messages
   useEffect(() => {
     if (inChat && selectedContact && user) {
       const chatId = [user.uid, selectedContact.id].sort().join('_');
@@ -95,14 +90,12 @@ export default function MessagesScreen() {
     }
   }, [inChat, selectedContact, user]);
 
-  // INNOVATION: Offline SMS Dispatcher
   const handleSendSMS = async (textToSend) => {
     const phoneNumber = selectedContact?.phoneNumber || selectedContact?.phone;
     if (!phoneNumber) return Alert.alert("Error", "No registered number for this responder.");
 
     const isAvailable = await SMS.isAvailableAsync();
     if (isAvailable) {
-      // Professional Emergency Template
       const smsBody = `[OneCall EMERGENCY]\nFrom: ${currentUserName}\nMessage: ${textToSend}`;
 
       const { result } = await SMS.sendSMSAsync([phoneNumber], smsBody);
