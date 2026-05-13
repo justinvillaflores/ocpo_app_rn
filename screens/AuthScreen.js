@@ -37,13 +37,12 @@ export default function AuthScreen({ navigation }) {
   const [contact, setContact] = useState('');
 
   useEffect(() => {
-    console.log("Checking auth status..."); // Dagdag mo ito
+    // FIXED: Titingnan muna ang local storage kung may user session na
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        console.log("User detected:", user.email); // Makikita mo ito sa terminal kung logged in
+        console.log("Offline Session Found:", user.email);
         navigation.replace('DirectoryScreen');
       } else {
-        console.log("No user session found.");
         setIsCheckingAuth(false);
       }
     });
@@ -100,6 +99,7 @@ export default function AuthScreen({ navigation }) {
         Alert.alert("Welcome!", "Account created successfully.");
       }
     } catch (error) {
+      // Kung offline at walang session, dito lalabas ang error na nakita mo sa screenshot
       Alert.alert("Authentication Error", error.message);
     } finally {
       setLoading(false);
@@ -122,7 +122,6 @@ export default function AuthScreen({ navigation }) {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.logoText}>OneCall</Text>
-
       <Text style={styles.welcomeTitle}>{isLogin ? "Welcome Back" : "Create Account"}</Text>
       <Text style={styles.subTitle}>{isLogin ? "Login to your account" : "Register for emergency access"}</Text>
 
@@ -133,7 +132,6 @@ export default function AuthScreen({ navigation }) {
               <Ionicons name="person-outline" size={20} color="#003399" />
               <TextInput placeholder="Full Name" style={styles.input} value={username} onChangeText={setUsername} />
             </View>
-
             <TouchableOpacity style={styles.inputContainer} onPress={() => setShowAddressModal(true)}>
               <Ionicons name="location-outline" size={20} color="#003399" />
               <Text style={[styles.input, { color: barangay ? '#000' : '#999', paddingTop: 15 }]}>
@@ -141,14 +139,12 @@ export default function AuthScreen({ navigation }) {
               </Text>
               <Ionicons name="chevron-down" size={20} color="#003399" />
             </TouchableOpacity>
-
             {barangay !== '' && (
               <View style={[styles.inputContainer, { backgroundColor: '#E3F2FD' }]}>
                 <Ionicons name="map-outline" size={20} color="#003399" />
                 <TextInput placeholder="House No. / Street" style={styles.input} value={street} onChangeText={setStreet} />
               </View>
             )}
-
             <View style={styles.inputContainer}>
               <Ionicons name="call-outline" size={20} color="#003399" />
               <TextInput placeholder="Contact Number" style={styles.input} value={contact} onChangeText={setContact} keyboardType="phone-pad" />

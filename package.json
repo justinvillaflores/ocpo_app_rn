@@ -24,6 +24,7 @@
     "expo": "~53.0.27",
     "expo-audio": "~0.4.9",
     "expo-av": "~15.1.7",
+    "expo-dev-client": "~5.2.4",
     "expo-image-picker": "~16.1.4",
     "expo-location": "~18.1.6",
     "expo-modules-core": "^2.5.0",

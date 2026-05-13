@@ -8,16 +8,19 @@ export default function DirectoryScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Ang onSnapshot ay gumagana kahit offline basta may cached data
+    // FIXED: Ang listener ay tinitingnan ang cache para gumana kahit offline
     const q = query(collection(db, "hotlines"), orderBy("name", "asc"));
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
       setHotlines(data);
       setLoading(false);
+
+      const source = snapshot.metadata.fromCache ? "Local Cache" : "Server";
+      console.log("Directory loaded from:", source);
     }, (error) => {
       console.error("Firestore Error:", error);
       setLoading(false);
@@ -76,7 +79,7 @@ export default function DirectoryScreen() {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
         <ActivityIndicator size="large" color="#0047AB" />
-        <Text style={{ marginTop: 10 }}>Updating Directory...</Text>
+        <Text style={{ marginTop: 10 }}>Accessing Directory...</Text>
       </View>
     );
   }
@@ -89,12 +92,6 @@ export default function DirectoryScreen() {
       <View style={{ alignItems: 'center', marginBottom: 10, marginTop: -20, }}>
         <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'center' }}>
           Welcome to <Text style={{ color: '#000' }}>Olongapo City Emergency Hotlines</Text>
-        </Text>
-      </View>
-
-      <View style={{ alignItems: 'center', marginBottom: 20 }}>
-        <Text style={{ fontSize: 14, color: '#555', textAlign: 'center' }}>
-          Tap the logo to make an emergency call.
         </Text>
       </View>
 
@@ -122,10 +119,6 @@ export default function DirectoryScreen() {
 
       <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginVertical: 10, marginTop: 50, marginBottom: 30 }}>BARANGAYS</Text>
       {renderGrid(barangays)}
-
-      <View style={{ marginTop: 30, marginBottom: -5, alignItems: 'center' }}>
-        <Text style={{ fontSize: 12, color: '#666', textAlign: 'center' }}>© 2025 Olongapo City Police Hotline App. All rights reserved.</Text>
-      </View>
     </ScrollView>
   );
 }

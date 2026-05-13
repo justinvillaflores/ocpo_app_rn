@@ -4,7 +4,11 @@ import {
   getReactNativePersistence,
   getAuth
 } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache } from "firebase/firestore";
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  getFirestore
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -18,23 +22,28 @@ const firebaseConfig = {
     measurementId: "G-2QX38MF8F5"
 };
 
-// Initialize Firebase App
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Auth with Persistence
-let auth;
-try {
-    auth = getAuth(app);
-} catch (e) {
-    auth = initializeAuth(app, {
-        persistence: getReactNativePersistence(AsyncStorage)
+export const auth = (() => {
+  try {
+    const existingAuth = getAuth(app);
+    return existingAuth;
+  } catch (e) {
+    return initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage)
     });
-}
+  }
+})();
 
-// Initialize Firestore with Local Cache for Offline Support
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache()
-});
+export const db = (() => {
+  try {
+    const existingDb = getFirestore(app);
+    return existingDb;
+  } catch (e) {
+    return initializeFirestore(app, {
+      localCache: persistentLocalCache({})
+    });
+  }
+})();
 
-export { auth };
 export const storage = getStorage(app);
