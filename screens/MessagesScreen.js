@@ -3,7 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Image,
   TextInput, SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator, StatusBar, Alert
 } from 'react-native';
-import { Search, Shield, Send, Plus, ChevronLeft, Building2, WifiOff } from 'lucide-react-native';
+import { Search, Shield, Send, Camera, ChevronLeft, Building2, WifiOff } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as SMS from 'expo-sms';
 import NetInfo from '@react-native-community/netinfo';
@@ -150,10 +150,20 @@ export default function MessagesScreen() {
     }
   };
 
-  const handlePickImage = async () => {
+  // Open Camera & Capture Photo
+  const handleOpenCamera = async () => {
     if (!isConnected) return Alert.alert("Offline", "Uploading photos requires internet.");
-    let result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+
+    // Request camera permission
+    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+
+    if (!permissionResult.granted) {
+      Alert.alert("Permission Denied", "Camera access is required to take photo updates.");
+      return;
+    }
+
+    // Launch camera
+    let result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       quality: 0.6,
     });
@@ -272,8 +282,8 @@ export default function MessagesScreen() {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.inputArea}>
-          <TouchableOpacity onPress={handlePickImage} disabled={uploading}>
-            {uploading ? <ActivityIndicator size="small" /> : <Plus size={24} color="#3B82F6" />}
+          <TouchableOpacity onPress={handleOpenCamera} disabled={uploading}>
+            {uploading ? <ActivityIndicator size="small" color="#3B82F6" /> : <Camera size={24} color="#3B82F6" />}
           </TouchableOpacity>
           <TextInput
             placeholder="Type message..."
