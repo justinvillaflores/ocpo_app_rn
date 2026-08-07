@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, Image, Linking, TextInput, ActivityIndicator } from 'react-native';
 import { db } from '../firebaseConfig';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, addDoc, serverTimestamp } from 'firebase/firestore';
 
 export default function ServicesScreen() {
   const [rating, setRating] = useState('');
@@ -53,14 +53,18 @@ export default function ServicesScreen() {
     if (hasBadWords(comment)) return setWarningVisible(true);
 
     try {
-      const formData = new FormData();
-      formData.append('entry.1309731542', rating);
-      formData.append('entry.17557046', comment);
-      await fetch('https://docs.google.com/forms/e/1FAIpQLSdoJqDVaQNQxx_L4dl4cTFNB2tLWA2L2oNpI7s5yLR5sDJ4Fw/formResponse', { method: 'POST', body: formData });
-      setRating(''); setComment(''); setModalVisible(false);
+      await addDoc(collection(db, "feedback"), {
+        rating: ratingNumber,
+        comment: comment.trim(),
+        createdAt: serverTimestamp()
+      });
+      setRating('');
+      setComment('');
+      setModalVisible(false);
       alert('Thank you for your feedback!');
     } catch (error) {
-      alert('Feedback requires internet connection. Please try again later.');
+      console.error("Error submitting feedback:", error);
+      alert('Failed to submit feedback. Please check your internet connection and try again.');
     }
   };
 

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Image,
-  TextInput, SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator, StatusBar, Alert
+  TextInput, SafeAreaView, KeyboardAvoidingView, Platform, ActivityIndicator, StatusBar, Alert, Modal
 } from 'react-native';
-import { Search, Shield, Send, Camera, ChevronLeft, Building2, WifiOff } from 'lucide-react-native';
+import { Search, Shield, Send, Camera, ChevronLeft, Building2, WifiOff, Image as ImageIcon } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as SMS from 'expo-sms';
 import NetInfo from '@react-native-community/netinfo';
@@ -13,7 +13,7 @@ import {
   collection, query, where, onSnapshot, orderBy,
   addDoc, serverTimestamp, doc, setDoc, getDoc, limit
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { onAuthStateChanged } from 'firebase/auth';
 
 export default function MessagesScreen() {
@@ -150,39 +150,67 @@ export default function MessagesScreen() {
     }
   };
 
-  // Open Camera & Capture Photo
+  // Fixed Camera Handler (Permissions + Clean Base64)
   const handleOpenCamera = async () => {
-    if (!isConnected) return Alert.alert("Offline", "Uploading photos requires internet.");
+    if (!isConnected) return Alert.alert("Offline", "Uploading photos requires an active internet connection.");
 
-    // Request camera permission
-    const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
-
-    if (!permissionResult.granted) {
-      Alert.alert("Permission Denied", "Camera access is required to take photo updates.");
+    const cameraPerm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!cameraPerm.granted) {
+      Alert.alert("Permission Required", "Camera permission is needed to attach photo updates.");
       return;
     }
 
-    // Launch camera
-    let result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      quality: 0.6,
-    });
+    try {
+      let result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        quality: 0.5,
+        base64: true,
+      });
 
-    if (!result.canceled) {
-      uploadImage(result.assets[0].uri);
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const rawBase64 = result.assets[0].base64;
+        if (rawBase64) {
+          const cleanBase64 = rawBase64.replace(/^data:image\/\w+;base64,/, '');
+          uploadImage(cleanBase64);
+        } else {
+          Alert.alert("Error", "Could not process captured image.");
+        }
+      }
+    } catch (error) {
+      console.error("Camera Launch Error:", error);
+      Alert.alert("Camera Error", "Unable to launch camera. Please try again.");
     }
   };
 
-  const uploadImage = async (uri) => {
+  // Upload Function with Loading State
+  const uploadImage = async (base64Data) => {
+    if (!selectedContact || !user) {
+      return Alert.alert("Error", "No active chat session found.");
+    }
+
     setUploading(true);
+
     try {
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const storageRef = ref(storage, `chat_uploads/${user.uid}_${Date.now()}`);
-      await uploadBytes(storageRef, blob);
+      const filename = `chat_uploads/${user.uid}_${Date.now()}.jpg`;
+      const storageRef = ref(storage, filename);
+
+      await uploadString(storageRef, base64Data, 'base64', {
+        contentType: 'image/jpeg',
+      });
+
       const url = await getDownloadURL(storageRef);
 
       const chatId = [user.uid, selectedContact.id].sort().join('_');
+      const chatRef = doc(db, "chats", chatId);
+
+      await setDoc(chatRef, {
+        lastMessage: "📷 Sent a photo proof",
+        updatedAt: serverTimestamp(),
+        participants: [user.uid, selectedContact.id],
+        citizenName: currentUserName,
+        responderName: selectedContact.name || selectedContact.username || "Responder"
+      }, { merge: true });
+
       await addDoc(collection(db, "chats", chatId, "messages"), {
         image: url,
         text: "",
@@ -190,8 +218,10 @@ export default function MessagesScreen() {
         receiverId: selectedContact.id,
         createdAt: serverTimestamp(),
       });
+
     } catch (e) {
-      Alert.alert("Error", "Failed to upload image.");
+      console.error("Firebase Storage Upload Error:", e);
+      Alert.alert("Upload Failed", e.message || "Failed to upload image. Please check your storage rules and network connection.");
     } finally {
       setUploading(false);
     }
@@ -217,13 +247,13 @@ export default function MessagesScreen() {
           <View style={styles.headerTop}>
             <View style={styles.iconCircle}><Shield size={20} color="#3B82F6" /></View>
             <View>
-                <Text style={styles.headerTitle}>Emergency Responders</Text>
-                {(isOfflineMode || !isConnected) && (
-                  <View style={styles.offlineBadge}>
-                    <WifiOff size={10} color="#EF4444" />
-                    <Text style={styles.offlineText}>OFFLINE MODE</Text>
-                  </View>
-                )}
+              <Text style={styles.headerTitle}>Emergency Responders</Text>
+              {(isOfflineMode || !isConnected) && (
+                <View style={styles.offlineBadge}>
+                  <WifiOff size={10} color="#EF4444" />
+                  <Text style={styles.offlineText}>OFFLINE MODE</Text>
+                </View>
+              )}
             </View>
           </View>
           <View style={styles.searchBar}>
@@ -251,6 +281,17 @@ export default function MessagesScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Uploading Overlay Modal */}
+      <Modal transparent visible={uploading} animationType="fade">
+        <View style={styles.uploadOverlay}>
+          <View style={styles.uploadBox}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text style={styles.uploadText}>Uploading photo...</Text>
+            <Text style={styles.uploadSubText}>Please wait a moment</Text>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.chatHeader}>
         <TouchableOpacity onPress={() => setInChat(false)}><ChevronLeft size={28} color="#1E293B" /></TouchableOpacity>
         <View style={styles.chatHeaderInfo}>
@@ -272,6 +313,14 @@ export default function MessagesScreen() {
         inverted
         keyExtractor={item => item.id}
         contentContainerStyle={{ padding: 15 }}
+        ListHeaderComponent={
+          uploading ? (
+            <View style={styles.uploadingBubble}>
+              <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+              <Text style={styles.uploadingBubbleText}>Sending photo proof...</Text>
+            </View>
+          ) : null
+        }
         renderItem={({ item }) => (
           <View style={item.senderId === user?.uid ? styles.msgSent : styles.msgReceived}>
             {item.image && <Image source={{ uri: item.image }} style={styles.msgImage} />}
@@ -282,7 +331,7 @@ export default function MessagesScreen() {
 
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <View style={styles.inputArea}>
-          <TouchableOpacity onPress={handleOpenCamera} disabled={uploading}>
+          <TouchableOpacity onPress={handleOpenCamera} disabled={uploading} style={styles.cameraBtn}>
             {uploading ? <ActivityIndicator size="small" color="#3B82F6" /> : <Camera size={24} color="#3B82F6" />}
           </TouchableOpacity>
           <TextInput
@@ -290,8 +339,13 @@ export default function MessagesScreen() {
             style={styles.chatInput}
             value={messageText}
             onChangeText={setMessageText}
+            editable={!uploading}
           />
-          <TouchableOpacity style={[styles.sendBtn, { backgroundColor: isConnected ? '#3B82F6' : '#EF4444' }]} onPress={handleAction}>
+          <TouchableOpacity
+            style={[styles.sendBtn, { backgroundColor: isConnected ? '#3B82F6' : '#EF4444' }]}
+            onPress={handleAction}
+            disabled={uploading}
+          >
             <Send size={18} color="white" />
           </TouchableOpacity>
         </View>
@@ -326,6 +380,17 @@ const styles = StyleSheet.create({
   msgTextSent: { color: '#FFFFFF' },
   msgImage: { width: 200, height: 150, borderRadius: 10, marginBottom: 5 },
   inputArea: { flexDirection: 'row', alignItems: 'center', padding: 10, gap: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  cameraBtn: { padding: 5, justifyContent: 'center', alignItems: 'center' },
   chatInput: { flex: 1, backgroundColor: '#F1F5F9', borderRadius: 20, paddingHorizontal: 15, height: 40 },
-  sendBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' }
+  sendBtn: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+
+  // Loading overlay styles
+  uploadOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center' },
+  uploadBox: { backgroundColor: '#FFFFFF', padding: 25, borderRadius: 16, alignItems: 'center', minWidth: 200, elevation: 5 },
+  uploadText: { marginTop: 12, fontSize: 16, fontWeight: '700', color: '#1E293B' },
+  uploadSubText: { fontSize: 12, color: '#64748B', marginTop: 4 },
+
+  // Chat stream loading bubble
+  uploadingBubble: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3B82F6', padding: 12, borderRadius: 15, alignSelf: 'flex-end', marginBottom: 10, opacity: 0.85 },
+  uploadingBubbleText: { color: '#FFFFFF', fontSize: 13, fontWeight: '600' }
 });

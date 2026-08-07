@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "851267786422",
+    "project_id": "onecall-d0bf8",
+    "storage_bucket": "onecall-d0bf8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:851267786422:android:d88c10e46004f1c1bcf817",
+        "android_client_info": {
+          "package_name": "com.justinvillaflores.ocpo_app_rn"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCLiEhc0A1PWxLQahrW_3mbPSbxLl9BAxU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

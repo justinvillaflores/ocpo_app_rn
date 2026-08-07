@@ -42,7 +42,7 @@ export default function ProfileScreen({ navigation }) {
 
   const onShare = async () => {
     try {
-      const result = await Share.share({
+      await Share.share({
         message: 'Download OneCall: Olongapo City Emergency Hotlines App soon!',
       });
     } catch (error) {
@@ -59,67 +59,106 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  if (loading) return <ActivityIndicator style={{flex:1}} size="large" color="#0047AB" />;
+  if (loading) return <ActivityIndicator style={{ flex: 1 }} size="large" color="#0047AB" />;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: '#f5f5f5' }}>
-      <View style={styles.profileCard}>
-        <Ionicons name="person-circle" size={80} color="#0047AB" />
-        <Text style={styles.userName}>{userData?.username || "Guest User"}</Text>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.topSection}>
+        {/* Profile Details Card */}
+        <View style={styles.profileCard}>
+          <View style={styles.avatarContainer}>
+            <Ionicons name="person-circle" size={90} color="#0047AB" />
+          </View>
+          <Text style={styles.userName}>{userData?.username || "Guest User"}</Text>
+          <Text style={styles.userRole}>Citizen Account</Text>
 
-        <View style={styles.infoList}>
-          <View style={styles.infoRow}>
-            <Ionicons name="call-outline" size={16} color="#666" />
-            <Text style={styles.infoText}>{userData?.phoneNumber || "No contact number provided"}</Text>
+          <View style={styles.divider} />
+
+          <View style={styles.infoList}>
+            <View style={styles.infoRow}>
+              <View style={styles.iconBox}>
+                <Ionicons name="call-outline" size={18} color="#0047AB" />
+              </View>
+              <View style={styles.infoTextGroup}>
+                <Text style={styles.infoLabel}>Contact Number</Text>
+                <Text style={styles.infoText}>{userData?.phoneNumber || "No contact number provided"}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <View style={styles.iconBox}>
+                <Ionicons name="location-outline" size={18} color="#0047AB" />
+              </View>
+              <View style={styles.infoTextGroup}>
+                <Text style={styles.infoLabel}>Address</Text>
+                <Text style={styles.infoText}>{userData?.address || "No address provided"}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoRow}>
+              <View style={styles.iconBox}>
+                <Ionicons name="mail-outline" size={18} color="#0047AB" />
+              </View>
+              <View style={styles.infoTextGroup}>
+                <Text style={styles.infoLabel}>Email Address</Text>
+                <Text style={styles.infoText}>{userData?.email || auth.currentUser?.email || "No email provided"}</Text>
+              </View>
+            </View>
           </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={16} color="#666" />
-            <Text style={styles.infoText}>{userData?.address || "No address provided"}</Text>
+        </View>
+
+        {/* Share Section Banner */}
+        <TouchableOpacity style={styles.shareCard} onPress={onShare} activeOpacity={0.8}>
+          <View style={styles.shareIconContainer}>
+            <Ionicons name="share-social" size={24} color="#0047AB" />
           </View>
-          <View style={styles.infoRow}>
-            <Ionicons name="mail-outline" size={16} color="#666" />
-            <Text style={styles.infoText}>{userData?.email || auth.currentUser?.email}</Text>
+          <View style={styles.shareTextContainer}>
+            <Text style={styles.shareTitle}>Share OneCall App</Text>
+            <Text style={styles.shareSubTitle}>Help others stay prepared for emergencies.</Text>
           </View>
+          <Ionicons name="chevron-forward" size={20} color="#bbb" />
+        </TouchableOpacity>
+
+        {/* Action Menu */}
+        <View style={styles.menuCard}>
+          <TouchableOpacity style={styles.item} activeOpacity={0.7}>
+            <View style={styles.itemLabel}>
+              <Ionicons name="help-circle-outline" size={22} color="#555" style={{ marginRight: 12 }} />
+              <Text style={styles.itemText}>Help & Support</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={[styles.item, { borderBottomWidth: 0 }]} onPress={() => setShowLogoutModal(true)} activeOpacity={0.7}>
+            <View style={styles.itemLabel}>
+              <Ionicons name="log-out-outline" size={22} color="#D32F2F" style={{ marginRight: 12 }} />
+              <Text style={[styles.itemText, { color: '#D32F2F', fontWeight: 'bold' }]}>Logout</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#D32F2F" />
+          </TouchableOpacity>
         </View>
       </View>
 
-      <TouchableOpacity style={styles.shareCard} onPress={onShare}>
-        <View style={styles.shareIconContainer}>
-          <Ionicons name="share-social" size={24} color="#0047AB" />
-        </View>
-        <View style={styles.shareTextContainer}>
-          <Text style={styles.shareTitle}>Share OneCall App</Text>
-          <Text style={styles.shareSubTitle}>Help others stay prepared for emergencies.</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={20} color="#ccc" />
-      </TouchableOpacity>
-
-      <View style={styles.menuCard}>
-        <TouchableOpacity style={styles.item}>
-          <View style={styles.itemLabel}>
-             <Ionicons name="help-circle-outline" size={20} color="#666" style={{marginRight: 10}} />
-             <Text>Help & Support</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="#ccc" />
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.item} onPress={() => setShowLogoutModal(true)}>
-          <View style={styles.itemLabel}>
-             <Ionicons name="log-out-outline" size={20} color="red" style={{marginRight: 10}} />
-             <Text style={{color: 'red'}}>Logout</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color="red" />
-        </TouchableOpacity>
+      {/* Footer Branding */}
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>OneCall Emergency System v1.0.0</Text>
+        <Text style={styles.footerSubText}>Olongapo City Emergency Response</Text>
       </View>
 
+      {/* Logout Modal */}
       <Modal
         visible={showLogoutModal}
         transparent={true}
         animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Ionicons name="alert-circle" size={50} color="#0047AB" />
+            <Ionicons name="alert-circle" size={54} color="#0047AB" />
             <Text style={styles.modalTitle}>Confirm Logout</Text>
             <Text style={styles.modalSubTitle}>Are you sure you want to log out of your account?</Text>
 
@@ -146,40 +185,210 @@ export default function ProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  profileCard: { backgroundColor: '#fff', margin: 15, borderRadius: 15, padding: 20, alignItems: 'center' },
-  userName: { fontSize: 20, fontWeight: 'bold', marginTop: 10, color: '#333' },
-  infoList: { marginTop: 15, width: '100%' },
-  infoRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8 },
-  infoText: { fontSize: 14, color: '#555', marginLeft: 10 },
-  shareCard: {
+  container: {
+    flex: 1,
+    backgroundColor: '#F4F6F9',
+  },
+  contentContainer: {
+    flexGrow: 1,
+    justify: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 80,
+    paddingBottom: 25,
+  },
+  topSection: {
+    width: '100%',
+  },
+  profileCard: {
     backgroundColor: '#fff',
-    marginHorizontal: 15,
-    borderRadius: 15,
+    borderRadius: 20,
     padding: 20,
+    alignItems: 'center',
+    marginBottom: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  avatarContainer: {
+    marginBottom: 4,
+  },
+  userName: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#1A1A1A',
+  },
+  userRole: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  divider: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#F0F0F0',
+    marginVertical: 16,
+  },
+  infoList: {
+    width: '100%',
+  },
+  infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 5
+    marginBottom: 14,
+  },
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#E3F2FD',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  infoTextGroup: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 11,
+    color: '#888',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#333',
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  shareCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
   },
   shareIconContainer: {
     backgroundColor: '#E3F2FD',
-    padding: 10,
-    borderRadius: 12,
-    marginRight: 15
+    padding: 12,
+    borderRadius: 14,
+    marginRight: 14,
   },
-  shareTextContainer: { flex: 1 },
-  shareTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
-  shareSubTitle: { fontSize: 12, color: '#888', marginTop: 2 },
-  menuCard: { backgroundColor: '#fff', margin: 15, borderRadius: 15, paddingVertical: 5 },
-  item: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 15, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#eee' },
-  itemLabel: { flexDirection: 'row', alignItems: 'center' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { backgroundColor: '#fff', width: '80%', borderRadius: 20, padding: 25, alignItems: 'center' },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', marginTop: 10, color: '#333' },
-  modalSubTitle: { fontSize: 14, color: '#666', textAlign: 'center', marginTop: 10, marginBottom: 20 },
-  modalButtons: { flexDirection: 'row', width: '100%', justifyContent: 'space-between' },
-  modalBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', marginHorizontal: 5 },
-  cancelBtn: { backgroundColor: '#f0f0f0' },
-  cancelBtnText: { color: '#333', fontWeight: 'bold' },
-  logoutBtn: { backgroundColor: '#0047AB' },
-  logoutBtnText: { color: '#fff', fontWeight: 'bold' },
+  shareTextContainer: {
+    flex: 1,
+  },
+  shareTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  shareSubTitle: {
+    fontSize: 12,
+    color: '#777',
+    marginTop: 2,
+  },
+  menuCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    paddingVertical: 4,
+    marginBottom: 16,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+  },
+  item: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  itemLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  itemText: {
+    fontSize: 15,
+    color: '#333',
+    fontWeight: '500',
+  },
+  footer: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#AAA',
+    fontWeight: '600',
+  },
+  footerSubText: {
+    fontSize: 11,
+    color: '#CCC',
+    marginTop: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    width: '85%',
+    borderRadius: 22,
+    padding: 24,
+    alignItems: 'center',
+  },
+  modalTitle: {
+    fontSize: 19,
+    fontWeight: 'bold',
+    marginTop: 12,
+    color: '#1A1A1A',
+  },
+  modalSubTitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginHorizontal: 5,
+  },
+  cancelBtn: {
+    backgroundColor: '#F0F2F5',
+  },
+  cancelBtnText: {
+    color: '#444',
+    fontWeight: '700',
+  },
+  logoutBtn: {
+    backgroundColor: '#D32F2F',
+  },
+  logoutBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
 });
