@@ -15,7 +15,6 @@ import {
   linkWithCredential
 } from 'firebase/auth';
 import { setDoc, doc, collection, query, where, getDocs } from 'firebase/firestore';
-import { FirebaseRecaptchaVerifierModal } from 'expo-firebase-recaptcha';
 
 // Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -30,9 +29,6 @@ const OLONGAPO_BARANGAYS = [
 ].sort();
 
 export default function AuthScreen({ navigation }) {
-  // ReCAPTCHA ref specifically for Expo / React Native WebViews
-  const recaptchaVerifier = useRef(null);
-
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -156,42 +152,6 @@ export default function AuthScreen({ navigation }) {
     }
   };
 
-  const triggerFirebaseOTPSend = async (e164Phone) => {
-    setIsSendingOTP(true);
-
-    try {
-      if (!recaptchaVerifier.current) {
-        Alert.alert(
-          "Initialization Error",
-          "ReCAPTCHA component is preparing. Please wait 2 seconds and tap Sign Up again."
-        );
-        return false;
-      }
-
-      const phoneProvider = new PhoneAuthProvider(auth);
-      const newVerificationId = await phoneProvider.verifyPhoneNumber(
-        e164Phone,
-        recaptchaVerifier.current
-      );
-
-      setVerificationId(newVerificationId);
-      setResendTimer(30);
-      setCanResend(false);
-      Alert.alert("SMS Code Sent", `The OTP code has been sent to ${e164Phone}. Please check your SMS.`);
-      return true;
-    } catch (error) {
-      console.error("Firebase Phone Auth Error:", error);
-      Alert.alert(
-        "Phone Verification Failed",
-        error.message || "Failed to send SMS code. Please verify SHA-1 settings in Firebase or check your phone number."
-      );
-      throw error;
-    } finally {
-      setIsSendingOTP(false);
-      setLoading(false);
-    }
-  };
-
   const handleAuth = async () => {
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
@@ -230,10 +190,8 @@ export default function AuthScreen({ navigation }) {
           return Alert.alert("Already Registered", "This mobile number is already registered.");
         }
 
-        const sent = await triggerFirebaseOTPSend(e164Phone);
-        if (sent) {
-          setShowOTPModal(true);
-        }
+        // Proceed to direct account creation
+        await handleDirectRegistration(trimmedEmail, trimmedPassword, e164Phone);
       } catch (error) {
         setIsRegistering(false);
         setLoading(false);
@@ -241,45 +199,10 @@ export default function AuthScreen({ navigation }) {
     }
   };
 
-  const handleResendOTP = async () => {
-    if (!canResend) return;
-    const e164Phone = formatPhoneNumberE164(contact);
+  const handleDirectRegistration = async (trimmedEmail, trimmedPassword, e164Phone) => {
     try {
-      await triggerFirebaseOTPSend(e164Phone);
-    } catch (error) {
-      // Handled in trigger
-    }
-  };
-
-  const handleVerifyOTPAndRegister = async () => {
-    const cleanCode = verificationCode.trim();
-
-    if (!cleanCode || cleanCode.length !== 6) {
-      return Alert.alert("Required", "Please enter a valid 6-digit verification code.");
-    }
-
-    if (!verificationId) {
-      return Alert.alert("Error", "No verification session found. Please request a new code.");
-    }
-
-    setIsVerifyingOTP(true);
-
-    try {
-      const phoneCredential = PhoneAuthProvider.credential(
-        verificationId,
-        cleanCode
-      );
-
-      const trimmedEmail = email.trim();
-      const trimmedPassword = password.trim();
       const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
       const user = userCredential.user;
-
-      try {
-        await linkWithCredential(user, phoneCredential);
-      } catch (linkError) {
-        console.warn("Phone linking warning:", linkError.message);
-      }
 
       const fullAddress = `${street.trim()}, Brgy. ${barangay}, Olongapo City`;
       await setDoc(doc(db, "users", user.uid), {
@@ -287,22 +210,21 @@ export default function AuthScreen({ navigation }) {
         address: fullAddress,
         barangay: barangay,
         street: street.trim(),
-        phoneNumber: formatPhoneNumberE164(contact),
-        isPhoneVerified: true,
+        phoneNumber: e164Phone,
+        isPhoneVerified: false,
         email: trimmedEmail,
         role: 'citizen',
         createdAt: new Date().toISOString()
       });
 
-      setShowOTPModal(false);
       setIsRegistering(false);
-      Alert.alert("Success", "Account created and phone number verified successfully!");
+      Alert.alert("Success", "Account created successfully!");
       safeNavigateToNextScreen();
     } catch (error) {
       console.error("Registration Error:", error);
-      Alert.alert("Verification Error", error.message || "Invalid OTP code or registration failed.");
+      Alert.alert("Registration Error", error.message || "Account creation failed.");
     } finally {
-      setIsVerifyingOTP(false);
+      setLoading(false);
     }
   };
 
@@ -331,13 +253,6 @@ export default function AuthScreen({ navigation }) {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Firebase ReCAPTCHA Verifier Modal */}
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        firebaseConfig={auth.app.options}
-        attemptInvisibleVerification={false}
-      />
-
       <Image
         source={require('../assets/1010.png')}
         style={styles.logoImage}
@@ -451,59 +366,6 @@ export default function AuthScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-
-      {/* Phone OTP Verification Modal */}
-      <Modal visible={showOTPModal} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Verify Mobile Number</Text>
-              <TouchableOpacity onPress={() => { setShowOTPModal(false); setIsRegistering(false); }}>
-                <Ionicons name="close" size={24} color="#333" />
-              </TouchableOpacity>
-            </View>
-            <Text style={{ fontSize: 14, color: '#666', marginBottom: 15 }}>
-              Enter the 6-digit verification code sent to {contact}:
-            </Text>
-            <TextInput
-              style={styles.otpInput}
-              placeholder="0 0 0 0 0 0"
-              keyboardType="number-pad"
-              maxLength={6}
-              value={verificationCode}
-              onChangeText={setVerificationCode}
-            />
-
-            <View style={styles.resendContainer}>
-              {canResend ? (
-                <TouchableOpacity onPress={handleResendOTP} disabled={isSendingOTP}>
-                  {isSendingOTP ? (
-                    <ActivityIndicator size="small" color="#003399" />
-                  ) : (
-                    <Text style={styles.resendActiveText}>Resend OTP Code</Text>
-                  )}
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.resendDisabledText}>
-                  Resend code in <Text style={{ fontWeight: 'bold' }}>{resendTimer}s</Text>
-                </Text>
-              )}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.mainButton, { marginTop: 15 }]}
-              onPress={handleVerifyOTPAndRegister}
-              disabled={isVerifyingOTP}
-            >
-              {isVerifyingOTP ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.buttonText}>Confirm & Sign Up</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
@@ -530,10 +392,6 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#003399' },
   barangaySearchInput: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 12, marginBottom: 15, fontSize: 15, textAlign: 'left' },
-  otpInput: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 12, marginBottom: 15, fontSize: 16, textAlign: 'center', letterSpacing: 4, fontWeight: 'bold' },
   barangayItem: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' },
-  barangayText: { fontSize: 16, color: '#333' },
-  resendContainer: { alignItems: 'center', marginVertical: 10 },
-  resendActiveText: { color: '#003399', fontWeight: 'bold', fontSize: 14 },
-  resendDisabledText: { color: '#888', fontSize: 13 }
+  barangayText: { fontSize: 16, color: '#333' }
 });
