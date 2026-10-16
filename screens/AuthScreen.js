@@ -11,8 +11,6 @@ import {
   signInWithEmailAndPassword,
   sendPasswordResetEmail,
   onAuthStateChanged,
-  PhoneAuthProvider,
-  linkWithCredential
 } from 'firebase/auth';
 import { setDoc, doc, collection, query, where, getDocs } from 'firebase/firestore';
 
@@ -20,6 +18,13 @@ import { setDoc, doc, collection, query, where, getDocs } from 'firebase/firesto
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+// ========================================================
+// PHILSMS API CONFIGURATION
+// ========================================================
+// Inilagay na rito ang iyong API Token at default Sender ID
+const PHILSMS_API_TOKEN = '5121|FvPGbsJkGvOfGE2EZNR129SVZladGtFw8exInRcmc555b7e3';
+const PHILSMS_SENDER_ID = 'PhilSMS';
 
 const OLONGAPO_BARANGAYS = [
   "Barretto", "East Bajac-bajac", "East Tapinac", "Gordon Heights",
@@ -44,14 +49,14 @@ export default function AuthScreen({ navigation }) {
   const [street, setStreet] = useState('');
   const [contact, setContact] = useState('');
 
-  // Firebase Phone Auth States
-  const [verificationId, setVerificationId] = useState(null);
+  // Custom OTP States (PhilSMS Gateway)
+  const [generatedOTP, setGeneratedOTP] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [isVerifyingOTP, setIsVerifyingOTP] = useState(false);
 
-  // Resend OTP States
-  const [resendTimer, setResendTimer] = useState(30);
+  // Resend Timer States
+  const [resendTimer, setResendTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [isSendingOTP, setIsSendingOTP] = useState(false);
 
@@ -91,6 +96,7 @@ export default function AuthScreen({ navigation }) {
     });
   };
 
+  // OTP Resend Countdown Logic
   useEffect(() => {
     let interval = null;
     if (showOTPModal && resendTimer > 0) {
@@ -152,6 +158,7 @@ export default function AuthScreen({ navigation }) {
     }
   };
 
+  // Step 1: Trigger Login or Register (Starts OTP sending)
   const handleAuth = async () => {
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
@@ -170,6 +177,7 @@ export default function AuthScreen({ navigation }) {
         setLoading(false);
       }
     } else {
+      // Registration Validation
       if (!contact.trim() || !barangay || !street.trim() || !username.trim()) {
         return Alert.alert("Required", "Please complete all fields.");
       }
@@ -183,15 +191,15 @@ export default function AuthScreen({ navigation }) {
       setIsRegistering(true);
 
       try {
+        // Check if phone exists in Firestore
         const phoneExists = await checkPhoneNumberExists(e164Phone);
         if (phoneExists) {
           setLoading(false);
           setIsRegistering(false);
-          return Alert.alert("Already Registered", "This mobile number is already registered.");
+          return Alert.alert("Already Registered", "This mobile number is already taken by another account.");
         }
 
-        // Proceed to direct account creation
-        await handleDirectRegistration(trimmedEmail, trimmedPassword, e164Phone);
+        await requestOTPCode(e164Phone);
       } catch (error) {
         setIsRegistering(false);
         setLoading(false);
@@ -199,33 +207,101 @@ export default function AuthScreen({ navigation }) {
     }
   };
 
-  const handleDirectRegistration = async (trimmedEmail, trimmedPassword, e164Phone) => {
+  // Step 2: Magpadala ng Totoong SMS OTP gamit ang PhilSMS API
+  const requestOTPCode = async (formattedPhone) => {
+    setIsSendingOTP(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
+      // Mag-generate ng random 6-digit OTP code
+      const newOTP = Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedOTP(newOTP);
+
+      // Tawagin ang PhilSMS API HTTP POST Endpoint
+      const response = await fetch('https://dashboard.philsms.com/api/v3/sms/send', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${PHILSMS_API_TOKEN}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          recipient: formattedPhone,
+          sender_id: PHILSMS_SENDER_ID,
+          type: 'plain',
+          message: `Ang iyong OneCall OTP code ay: ${newOTP}. Valid ito para sa pag-verify ng iyong account.`
+        })
+      });
+
+      const resData = await response.json();
+
+      if (response.ok && (resData.status === 'success' || resData.code === '200')) {
+        setShowOTPModal(true);
+        setResendTimer(60);
+        setCanResend(false);
+        Alert.alert("OTP Sent", `Nagsend kami ng verification code sa ${formattedPhone}`);
+      } else {
+        throw new Error(resData.message || resData.message?.[0] || 'Nabigo sa pagpapadala ng SMS via PhilSMS.');
+      }
+    } catch (error) {
+      console.error("PhilSMS OTP Error:", error);
+      Alert.alert(
+        "OTP Delivery Error",
+        error.message || "Failed to send SMS code. Please check your network connection."
+      );
+      setIsRegistering(false);
+    } finally {
+      setIsSendingOTP(false);
+      setLoading(false);
+    }
+  };
+
+  // Step 3: I-verify ang in-input na OTP ng user at i-save ang User account sa Firebase
+  const handleVerifyOTP = async () => {
+    if (!verificationCode || verificationCode.length < 6) {
+      return Alert.alert("Invalid Code", "Please enter the complete 6-digit OTP code.");
+    }
+
+    if (verificationCode.trim() !== generatedOTP) {
+      return Alert.alert("Verification Failed", "Incorrect OTP code. Please check the SMS and try again.");
+    }
+
+    setIsVerifyingOTP(true);
+    try {
+      // Verified na ang Totoong CP Number! I-create na ang account sa Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password.trim());
       const user = userCredential.user;
 
+      const e164Phone = formatPhoneNumberE164(contact);
       const fullAddress = `${street.trim()}, Brgy. ${barangay}, Olongapo City`;
+
+      // I-save sa Firestore
       await setDoc(doc(db, "users", user.uid), {
         username: username.trim(),
         address: fullAddress,
         barangay: barangay,
         street: street.trim(),
         phoneNumber: e164Phone,
-        isPhoneVerified: false,
-        email: trimmedEmail,
+        isPhoneVerified: true,
+        email: email.trim(),
         role: 'citizen',
         createdAt: new Date().toISOString()
       });
 
+      setShowOTPModal(false);
       setIsRegistering(false);
-      Alert.alert("Success", "Account created successfully!");
+      Alert.alert("Success", "Phone number verified and account created successfully!");
       safeNavigateToNextScreen();
     } catch (error) {
-      console.error("Registration Error:", error);
-      Alert.alert("Registration Error", error.message || "Account creation failed.");
+      console.error("Firebase Registration Error:", error);
+      Alert.alert("Registration Error", error.message);
     } finally {
-      setLoading(false);
+      setIsVerifyingOTP(false);
     }
+  };
+
+  const handleResendOTP = async () => {
+    if (!canResend) return;
+    const e164Phone = formatPhoneNumberE164(contact);
+    await requestOTPCode(e164Phone);
   };
 
   const handleForgotPassword = async () => {
@@ -366,6 +442,53 @@ export default function AuthScreen({ navigation }) {
           </View>
         </View>
       </Modal>
+
+      {/* OTP Verification Modal */}
+      <Modal visible={showOTPModal} animationType="slide" transparent={true}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Enter OTP Code</Text>
+              <TouchableOpacity onPress={() => { setShowOTPModal(false); setIsRegistering(false); }}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.otpDescription}>
+              We sent a 6-digit verification code to <Text style={{ fontWeight: 'bold' }}>{formatPhoneNumberE164(contact)}</Text>
+            </Text>
+
+            <View style={styles.otpInputContainer}>
+              <TextInput
+                style={styles.otpInput}
+                placeholder="000000"
+                keyboardType="number-pad"
+                maxLength={6}
+                value={verificationCode}
+                onChangeText={setVerificationCode}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={styles.mainButton}
+              onPress={handleVerifyOTP}
+              disabled={isVerifyingOTP}
+            >
+              {isVerifyingOTP ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Verify & Create Account</Text>}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.resendContainer}
+              onPress={handleResendOTP}
+              disabled={!canResend || isSendingOTP}
+            >
+              <Text style={[styles.resendText, { color: canResend ? '#003399' : '#999' }]}>
+                {canResend ? "Resend Code" : `Resend code in ${resendTimer}s`}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -393,5 +516,10 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#003399' },
   barangaySearchInput: { backgroundColor: '#F1F5F9', borderRadius: 10, padding: 12, marginBottom: 15, fontSize: 15, textAlign: 'left' },
   barangayItem: { paddingVertical: 15, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' },
-  barangayText: { fontSize: 16, color: '#333' }
+  barangayText: { fontSize: 16, color: '#333' },
+  otpDescription: { fontSize: 14, color: '#666', marginBottom: 20, textAlign: 'center' },
+  otpInputContainer: { backgroundColor: '#F1F5F9', borderRadius: 12, marginBottom: 20, height: 55, justifyContent: 'center' },
+  otpInput: { fontSize: 24, letterSpacing: 8, textAlign: 'center', fontWeight: 'bold', color: '#003399' },
+  resendContainer: { marginTop: 15, alignItems: 'center' },
+  resendText: { fontSize: 14, fontWeight: '600' }
 });

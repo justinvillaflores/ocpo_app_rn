@@ -2,7 +2,6 @@
   "expo": {
     "name": "One Call",
     "slug": "ocpo-hotlines",
-    "owner": "jstnvdev",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/1010.png",
@@ -29,16 +28,17 @@
     },
     "plugins": [
       "expo-audio",
-      "expo-video"
+      "expo-video",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      "expo-font"
     ],
     "runtimeVersion": "1.0.0",
     "extra": {
       "eas": {
-        "projectId": "637d8258-0313-4008-9131-168623f45d01"
+        "projectId": "3217c2f7-a477-4c5c-985e-b8cd2fb99f8f"
       }
     },
-    "updates": {
-      "url": "https://u.expo.dev/637d8258-0313-4008-9131-168623f45d01"
-    }
+    "owner": "villafloresjustindev"
   }
 }
