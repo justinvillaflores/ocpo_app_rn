@@ -148,21 +148,27 @@ export default function DirectoryScreen() {
     };
   }, []);
 
-  // Case-insensitive category filtering.
+  // Categories na para lamang sa Directory.
+  const normalizeCategory = (category) =>
+    String(category || '').trim().toLowerCase();
+
   const policeStations = hotlines.filter(
-    (hotline) =>
-      hotline.category?.trim().toLowerCase() === 'police'
+    (hotline) => normalizeCategory(hotline.category) === 'police'
   );
 
   const barangays = hotlines.filter(
-    (hotline) =>
-      hotline.category?.trim().toLowerCase() === 'barangay'
+    (hotline) => normalizeCategory(hotline.category) === 'barangay'
   );
 
   const otherHotlines = hotlines.filter((hotline) => {
-    const category = hotline.category?.trim().toLowerCase() || '';
+    const category = normalizeCategory(hotline.category);
 
-    return category !== 'police' && category !== 'barangay';
+    // "other" ay kasama para sa mga lumang record na
+    // na-save bago inayos ang admin category value.
+    return (
+      category === 'other emergency hotlines' ||
+      category === 'other'
+    );
   });
 
   // Static emergency contacts.

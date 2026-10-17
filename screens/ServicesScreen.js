@@ -138,20 +138,53 @@ export default function ServicesScreen() {
     };
   }, []);
 
+  // Normalize category values for reliable filtering.
   const categoryOf = (item) =>
-    (item.category || '').trim().toLowerCase();
+    String(item.category || '').trim().toLowerCase();
 
+  // Categories na para lamang sa Services screen.
   const sections = [
-    { title: 'Report', items: allData.filter(
-      (x) => categoryOf(x) === 'report') },
-    { title: 'Services', items: allData.filter(
-      (x) => categoryOf(x).includes('service')) },
-    { title: 'Pages', items: allData.filter(
-      (x) => ['page', 'pages'].includes(categoryOf(x))) },
-    { title: 'Other Pages', items: allData.filter(
-      (x) => categoryOf(x).includes('other')) },
-    { title: 'Olongapo City CCTV Live Stream One', items: allData.filter(
-      (x) => categoryOf(x).includes('cctv')) },
+    {
+      title: 'Report',
+      items: allData.filter(
+        (item) => categoryOf(item) === 'report'
+      ),
+    },
+    {
+      title: 'Services',
+      items: allData.filter(
+        (item) => categoryOf(item) === 'services'
+      ),
+    },
+    {
+      title: 'Other Pages',
+      items: allData.filter(
+        (item) => categoryOf(item) === 'other pages'
+      ),
+    },
+    {
+      title: 'Pages',
+      items: allData.filter(
+        (item) => {
+          const category = categoryOf(item);
+          return category === 'page' || category === 'pages';
+        }
+      ),
+    },
+    {
+      title: 'CCTV Stream',
+      items: allData.filter(
+        (item) => {
+          const category = categoryOf(item);
+
+          // Support both new and old saved CCTV category values.
+          return (
+            category === 'cctv stream' ||
+            category.includes('cctv')
+          );
+        }
+      ),
+    },
   ];
 
   const badWords = [
@@ -272,7 +305,7 @@ export default function ServicesScreen() {
         <Text style={styles.offlineText}>OFFLINE MODE - CACHED DATA</Text>
       </View>}
 
-      <View style={styles.banner}>
+      <View style={styles.banner}>ot
         <Image source={require('../assets/ocposervices.png')}
           style={styles.bannerImage} />
       </View>

@@ -14,15 +14,10 @@ import {
 } from 'firebase/auth';
 import { setDoc, doc, collection, query, where, getDocs } from 'firebase/firestore';
 
-// Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// ========================================================
-// PHILSMS API CONFIGURATION
-// ========================================================
-// Inilagay na rito ang iyong API Token at default Sender ID
 const PHILSMS_API_TOKEN = '5121|FvPGbsJkGvOfGE2EZNR129SVZladGtFw8exInRcmc555b7e3';
 const PHILSMS_SENDER_ID = 'PhilSMS';
 
@@ -49,18 +44,15 @@ export default function AuthScreen({ navigation }) {
   const [street, setStreet] = useState('');
   const [contact, setContact] = useState('');
 
-  // Custom OTP States (PhilSMS Gateway)
   const [generatedOTP, setGeneratedOTP] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [showOTPModal, setShowOTPModal] = useState(false);
   const [isVerifyingOTP, setIsVerifyingOTP] = useState(false);
 
-  // Resend Timer States
   const [resendTimer, setResendTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [isSendingOTP, setIsSendingOTP] = useState(false);
 
-  // Animation values
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
@@ -96,7 +88,6 @@ export default function AuthScreen({ navigation }) {
     });
   };
 
-  // OTP Resend Countdown Logic
   useEffect(() => {
     let interval = null;
     if (showOTPModal && resendTimer > 0) {
@@ -158,7 +149,6 @@ export default function AuthScreen({ navigation }) {
     }
   };
 
-  // Step 1: Trigger Login or Register (Starts OTP sending)
   const handleAuth = async () => {
     const trimmedEmail = email.trim();
     const trimmedPassword = password.trim();
@@ -177,7 +167,6 @@ export default function AuthScreen({ navigation }) {
         setLoading(false);
       }
     } else {
-      // Registration Validation
       if (!contact.trim() || !barangay || !street.trim() || !username.trim()) {
         return Alert.alert("Required", "Please complete all fields.");
       }
@@ -191,7 +180,6 @@ export default function AuthScreen({ navigation }) {
       setIsRegistering(true);
 
       try {
-        // Check if phone exists in Firestore
         const phoneExists = await checkPhoneNumberExists(e164Phone);
         if (phoneExists) {
           setLoading(false);
@@ -207,15 +195,12 @@ export default function AuthScreen({ navigation }) {
     }
   };
 
-  // Step 2: Magpadala ng Totoong SMS OTP gamit ang PhilSMS API
   const requestOTPCode = async (formattedPhone) => {
     setIsSendingOTP(true);
     try {
-      // Mag-generate ng random 6-digit OTP code
       const newOTP = Math.floor(100000 + Math.random() * 900000).toString();
       setGeneratedOTP(newOTP);
 
-      // Tawagin ang PhilSMS API HTTP POST Endpoint
       const response = await fetch('https://dashboard.philsms.com/api/v3/sms/send', {
         method: 'POST',
         headers: {
@@ -227,19 +212,21 @@ export default function AuthScreen({ navigation }) {
           recipient: formattedPhone,
           sender_id: PHILSMS_SENDER_ID,
           type: 'plain',
-          message: `Ang iyong OneCall OTP code ay: ${newOTP}. Valid ito para sa pag-verify ng iyong account.`
+          message: `OneCall PIN: ${newOTP}. Do not share with anyone.`
         })
       });
 
       const resData = await response.json();
 
-      if (response.ok && (resData.status === 'success' || resData.code === '200')) {
+      if (response.ok && (resData.status === 'success' || resData.code === '200' || resData.code === 200)) {
         setShowOTPModal(true);
         setResendTimer(60);
         setCanResend(false);
-        Alert.alert("OTP Sent", `Nagsend kami ng verification code sa ${formattedPhone}`);
+        Alert.alert("OTP Sent", `We sent a verification code to ${formattedPhone}`);
       } else {
-        throw new Error(resData.message || resData.message?.[0] || 'Nabigo sa pagpapadala ng SMS via PhilSMS.');
+        throw new Error(
+          resData.message || (Array.isArray(resData.message) ? resData.message[0] : 'Failed to send SMS via PhilSMS.')
+        );
       }
     } catch (error) {
       console.error("PhilSMS OTP Error:", error);
@@ -254,7 +241,6 @@ export default function AuthScreen({ navigation }) {
     }
   };
 
-  // Step 3: I-verify ang in-input na OTP ng user at i-save ang User account sa Firebase
   const handleVerifyOTP = async () => {
     if (!verificationCode || verificationCode.length < 6) {
       return Alert.alert("Invalid Code", "Please enter the complete 6-digit OTP code.");
@@ -266,14 +252,12 @@ export default function AuthScreen({ navigation }) {
 
     setIsVerifyingOTP(true);
     try {
-      // Verified na ang Totoong CP Number! I-create na ang account sa Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password.trim());
       const user = userCredential.user;
 
       const e164Phone = formatPhoneNumberE164(contact);
       const fullAddress = `${street.trim()}, Brgy. ${barangay}, Olongapo City`;
 
-      // I-save sa Firestore
       await setDoc(doc(db, "users", user.uid), {
         username: username.trim(),
         address: fullAddress,
@@ -413,7 +397,6 @@ export default function AuthScreen({ navigation }) {
         </View>
       </Animated.View>
 
-      {/* Barangay Selection Modal */}
       <Modal visible={showAddressModal} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
@@ -443,7 +426,6 @@ export default function AuthScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* OTP Verification Modal */}
       <Modal visible={showOTPModal} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
