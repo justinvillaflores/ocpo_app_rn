@@ -1,20 +1,12 @@
-import React, { useState, useEffect } from 'react';
+
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, Modal, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import {
-  View,
-  Text,
-  Modal,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator
-} from 'react-native';
-
 import { auth, db } from './firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -31,10 +23,7 @@ const Tab = createBottomTabNavigator();
 
 function MainTabs() {
   return (
-    <Tab.Navigator
-      screenOptions={{ headerShown: false }}
-      tabBar={(props) => <CustomTabBar {...props} />}
-    >
+    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <CustomTabBar {...props} />}>
       <Tab.Screen name="Directory" component={DirectoryScreen} />
       <Tab.Screen name="Services" component={ServicesScreen} />
       <Tab.Screen name="Messages" component={MessagesScreen} />
@@ -44,118 +33,197 @@ function MainTabs() {
   );
 }
 
+// Linisin at pag-isahin ang address components.
+function cleanAddress(value) {
+  if (typeof value !== 'string') return '';
+  return value.trim().replace(/\s+/g, ' ');
+}
+
+function sameArea(a, b) {
+  return cleanAddress(a).toLowerCase() === cleanAddress(b).toLowerCase();
+}
+
+function getLocationAddress(place) {
+  if (!place) {
+    return { street: '', barangay: '' };
+  }
+
+  const street = [
+    cleanAddress(place.streetNumber),
+    cleanAddress(place.street)
+  ].filter(Boolean).join(' ');
+
+  const province = cleanAddress(place.subregion);
+  const region = cleanAddress(place.region);
+  const city = cleanAddress(place.city);
+  const streetName = cleanAddress(place.street);
+  const district = cleanAddress(place.district);
+  const subLocality = cleanAddress(place.subLocality);
+  const name = cleanAddress(place.name);
+
+  // Huwag gamitin ang province o region bilang barangay.
+  const validBarangay = (value) => {
+    if (!value) return '';
+    if (sameArea(value, province) || sameArea(value, region) || sameArea(value, city)) return '';
+    if (sameArea(value, streetName) || sameArea(value, street)) return '';
+    return value;
+  };
+
+  const barangay = validBarangay(district) ||
+    validBarangay(subLocality) ||
+    validBarangay(name) || '';
+
+  return { street, barangay };
+}
+
+async function getAddressFromCoordinates(latitude, longitude) {
+  try {
+    const results = await Location.reverseGeocodeAsync({ latitude, longitude });
+    const place = results?.[0];
+    return getLocationAddress(place);
+  } catch (error) {
+    console.log('Reverse geocoding error:', error);
+    return { street: '', barangay: '' };
+  }
+}
+
+async function saveUserLocation(uid, coords) {
+  const latitude = coords.latitude;
+  const longitude = coords.longitude;
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+
+  const address = await getAddressFromCoordinates(latitude, longitude);
+
+  await setDoc(doc(db, 'users', uid), {
+    lastKnownLat: latitude,
+    lastKnownLon: longitude,
+    lastKnownStreet: address.street || '',
+    lastKnownBarangay: address.barangay || '',
+    lastLocationUpdate: serverTimestamp()
+  }, { merge: true });
+}
+
 export default function App() {
   const [showNotice, setShowNotice] = useState(false);
   const [user, setUser] = useState(null);
   const [initializing, setInitializing] = useState(true);
+  const locationSubscription = useRef(null);
+  const activeUid = useRef(null);
 
   useEffect(() => {
-    const startup = async () => {
+    let mounted = true;
+
+    const initialize = async () => {
       try {
-        const hasAgreed = await AsyncStorage.getItem('hasAgreedToNotice');
-        if (hasAgreed !== 'true') {
-          setShowNotice(true);
-        }
-
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-          setUser(currentUser);
-          setInitializing(false);
-
-          if (currentUser) {
-            startLocationTracking(currentUser.uid);
-          }
-        });
-
-        return unsubscribe;
-      } catch (e) {
-        console.log("Startup Error: ", e);
-        setInitializing(false);
+        const agreed = await AsyncStorage.getItem('hasAgreedToNotice');
+        if (mounted && agreed !== 'true') setShowNotice(true);
+      } catch (error) {
+        console.log('Notice loading error:', error);
       }
     };
 
-    startup();
-  }, []);
+    initialize();
 
-  const startLocationTracking = async (uid) => {
-    try {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') return;
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+      if (!mounted) return;
 
-      await Location.watchPositionAsync(
-        {
+      setUser(currentUser);
+      setInitializing(false);
+
+      if (activeUid.current !== currentUser?.uid) {
+        locationSubscription.current?.remove();
+        locationSubscription.current = null;
+        activeUid.current = currentUser?.uid || null;
+      }
+
+      if (!currentUser || locationSubscription.current) return;
+
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted' || !mounted || auth.currentUser?.uid !== currentUser.uid) return;
+
+        const initialLocation = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High
+        });
+
+        await saveUserLocation(currentUser.uid, initialLocation.coords);
+
+        if (!mounted || auth.currentUser?.uid !== currentUser.uid) return;
+
+        locationSubscription.current = await Location.watchPositionAsync({
           accuracy: Location.Accuracy.High,
           timeInterval: 10000,
-          distanceInterval: 10,
-        },
-        async (location) => {
-          const { latitude, longitude } = location.coords;
-          let reverse = await Location.reverseGeocodeAsync({ latitude, longitude });
-          const place = reverse[0];
+          distanceInterval: 10
+        }, async (location) => {
+          try {
+            if (auth.currentUser?.uid !== currentUser.uid) return;
+            await saveUserLocation(currentUser.uid, location.coords);
+          } catch (error) {
+            console.log('Saving location error:', error);
+          }
+        });
+      } catch (error) {
+        console.log('Location tracking error:', error);
+      }
+    });
 
-          const userRef = doc(db, "users", uid);
-          await updateDoc(userRef, {
-            lastKnownLat: latitude,
-            lastKnownLon: longitude,
-            lastKnownStreet: place?.street || "Unknown Street",
-            lastKnownBarangay: place?.district || place?.subregion || "Unknown Brgy",
-            lastLocationUpdate: serverTimestamp(),
-            isOnline: true
-          });
-        }
-      );
-    } catch (err) {
-      console.log("Location Error: ", err);
+    return () => {
+      mounted = false;
+      unsubscribeAuth();
+      locationSubscription.current?.remove();
+      locationSubscription.current = null;
+    };
+  }, []);
+
+  const handleAgree = async () => {
+    try {
+      await AsyncStorage.setItem('hasAgreedToNotice', 'true');
+      setShowNotice(false);
+    } catch (error) {
+      console.log('Saving notice agreement failed:', error);
     }
   };
 
-  const handleAgree = async () => {
-    await AsyncStorage.setItem('hasAgreedToNotice', 'true');
-    setShowNotice(false);
-  };
-
   if (initializing) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#003399" />
-      </View>
-    );
+    return <View style={styles.loading}><ActivityIndicator size="large" color="#003399" /></View>;
   }
 
   return (
     <>
-      <Modal visible={showNotice} animationType="fade" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalTitle}>Notice to the Public</Text>
-              <Text style={styles.modalText}>
-                Welcome to the <Text style={styles.bold}>Olongapo City Hotlines</Text> mobile application.
-                Before you proceed, please read and understand the following disclaimer:
+      <Modal visible={showNotice} animationType="fade" transparent>
+        <View style={styles.overlay}>
+          <View style={styles.modal}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.title}>Notice to the Public</Text>
+              <Text style={styles.body}>
+                Welcome to the Olongapo City Hotlines mobile application. Please read this disclaimer before continuing.
               </Text>
-              <Text style={styles.modalText}>
-                <Text style={styles.bold}>Developed with purpose. Built for public safety.</Text>{'\n'}
-                A collaboration between Computer Science students from Gordon College and the Olongapo City Police Office — serving the community through technology.
+              <Text style={styles.body}>
+                <Text style={styles.bold}>1. General Information: </Text>
+                This app provides access to emergency contact numbers and public service hotlines. Information may not always be complete or up to date.
               </Text>
-              <Text style={styles.modalText}>
-                1. <Text style={styles.bold}>General Information:</Text> The Olongapo City Hotlines mobile application is developed to provide fast and convenient access to key emergency contact numbers and essential public service hotlines in Olongapo City. The information in this app is intended for general guidance only. While we strive to keep all information accurate and up to date, we do not guarantee its completeness or real-time reliability.
+              <Text style={styles.body}>
+                <Text style={styles.bold}>2. Service Limitations: </Text>
+                Some features require internet access, GPS permission, or third-party services. Hotline access may remain available offline.
               </Text>
-              <Text style={styles.modalText}>
-                2. <Text style={styles.bold}>Service Limitations:</Text> Some services and features within the app may be limited due to external factors such as internet connection, device performance, or third-party services. While most features are accessible offline, certain components (like feedback or future updates) may require internet access and may be subject to change without prior notice.
+              <Text style={styles.body}>
+                <Text style={styles.bold}>3. Third-Party Services: </Text>
+                External websites and services are not controlled by the developers.
               </Text>
-              <Text style={styles.modalText}>
-                3. <Text style={styles.bold}>Third-Party Content and Websites:</Text> This app may contain links or references to external websites and services not controlled by the developers or the Olongapo City Police Office. We do not take responsibility for the content, policies, or accuracy of any third-party services. Users should review their terms and privacy policies independently.
+              <Text style={styles.body}>
+                <Text style={styles.bold}>4. Emergency Use: </Text>
+                This app does not replace official emergency hotlines. Call the appropriate emergency number directly when urgent assistance is needed.
               </Text>
-              <Text style={styles.modalText}>
-                4. <Text style={styles.bold}>Personal Safety and Emergency Use:</Text> The Olongapo City Hotlines app is not a replacement for official emergency hotlines. In case of urgent or life-threatening situations, always call emergency numbers directly. The app is designed as a support tool, and we are not liable for actions or decisions made solely based on the app’s content.
+              <Text style={styles.body}>
+                <Text style={styles.bold}>5. Data Privacy: </Text>
+                Location and other submitted information may be processed to support app features. Use location sharing only with the required permission.
               </Text>
-              <Text style={styles.modalText}>
-                5. <Text style={styles.bold}>Data Privacy:</Text> Your privacy is important. Any data voluntarily submitted through the app (e.g., feedback or suggestions) is handled in accordance with applicable privacy laws and solely for improving public service and system quality.
+              <Text style={styles.body}>
+                By continuing, you acknowledge that you have read this notice.
               </Text>
-              <Text style={styles.acceptText}>
-                By using the Olongapo City Hotlines mobile application, you acknowledge that you have read and understood this disclaimer. If you do not agree with any part of this notice, please refrain from using the app. Your continued use implies acceptance of the terms stated herein.
-              </Text>
-              <TouchableOpacity style={styles.agreeButton} onPress={handleAgree}>
-                <Text style={styles.agreeText}>I agree</Text>
+              <TouchableOpacity style={styles.button} onPress={handleAgree}>
+                <Text style={styles.buttonText}>I agree</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -164,11 +232,9 @@ export default function App() {
 
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          {user ? (
-            <Stack.Screen name="MainApp" component={MainTabs} />
-          ) : (
-            <Stack.Screen name="Auth" component={AuthScreen} />
-          )}
+          {user
+            ? <Stack.Screen name="MainApp" component={MainTabs} />
+            : <Stack.Screen name="Auth" component={AuthScreen} />}
         </Stack.Navigator>
       </NavigationContainer>
     </>
@@ -176,14 +242,12 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
-  modalContainer: { backgroundColor: 'white', borderRadius: 20, width: '90%', maxHeight: '85%', padding: 20, elevation: 10 },
-  modalContent: { flexGrow: 1 },
-  modalTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 15, color: '#003399', textAlign: 'center' },
-  modalText: { fontSize: 13, marginBottom: 12, lineHeight: 18, color: '#444', textAlign: 'justify' },
-  acceptText: { fontSize: 12, marginTop: 5, marginBottom: 15, color: '#666', fontStyle: 'italic', textAlign: 'center' },
+  loading: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
+  overlay: { flex: 1, backgroundColor: '#0009', justifyContent: 'center', alignItems: 'center' },
+  modal: { backgroundColor: '#fff', borderRadius: 20, width: '90%', maxHeight: '85%', padding: 20, elevation: 10 },
+  title: { fontSize: 22, fontWeight: 'bold', marginBottom: 15, color: '#003399', textAlign: 'center' },
+  body: { fontSize: 13, marginBottom: 12, lineHeight: 18, color: '#444', textAlign: 'justify' },
   bold: { fontWeight: 'bold', color: '#000' },
-  agreeButton: { backgroundColor: '#003399', alignSelf: 'center', paddingHorizontal: 50, paddingVertical: 12, borderRadius: 25, marginTop: 5, marginBottom: 10 },
-  agreeText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
+  button: { backgroundColor: '#003399', alignSelf: 'center', paddingHorizontal: 50, paddingVertical: 12, borderRadius: 25, marginVertical: 10 },
+  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
 });
