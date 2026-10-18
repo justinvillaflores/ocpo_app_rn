@@ -1,44 +1,39 @@
 
-import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  Image,
-  Linking,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, Image, Linking, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../firebaseConfig';
-import {
-  collection,
-  onSnapshot,
-  query,
-  orderBy,
-} from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 const CACHE_KEY = '@directory_hotlines_cache';
+const DEFAULT_LOGO = require('../assets/OCPO.png');
+const styles = {
+  page: { flex: 1, paddingHorizontal: 20, paddingTop: 70, backgroundColor: '#fff' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
+  heading: { fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginTop: 30, marginBottom: 25 },
+  tile: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
+  logo: { width: 70, height: 70, marginBottom: 5, borderWidth: 1, borderColor: '#000', borderRadius: 10, backgroundColor: '#f9f9f9' },
+  label: { fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
+  offline: { backgroundColor: '#FF8C00', padding: 6, borderRadius: 5, marginBottom: 10 },
+  offlineText: { color: '#fff', textAlign: 'center', fontSize: 10, fontWeight: 'bold' },
+};
 
-// Image component: local fallback kapag walang image o pumalya ang online image.
-const SmartImage = ({ uri, defaultSource, style }) => {
-  const [imageError, setImageError] = useState(false);
+const normalize = (doc) => {
+  const d = doc.data();
+  return {
+    ...d,
+    id: doc.id,
+    name: d.name || d.title || d.hotlineName || 'Hotline',
+    number: d.number || d.phoneNumber || d.contactNumber || d.hotlineNumber || d.phone || '',
+    category: String(d.category || d.type || 'other').trim().toLowerCase(),
+    imageUrl: d.imageUrl || d.logoUrl || d.image || d.logo || null,
+  };
+};
 
-  useEffect(() => {
-    setImageError(false);
-  }, [uri]);
-
-  if (!uri || imageError) {
-    return <Image source={defaultSource} style={style} />;
-  }
-
-  return (
-    <Image
-      source={{ uri }}
-      style={style}
-      onError={() => setImageError(true)}
-    />
-  );
+const SmartImage = ({ uri }) => {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [uri]);
+  return <Image source={uri && !failed ? { uri } : DEFAULT_LOGO} style={styles.logo} onError={() => setFailed(true)} />;
 };
 
 export default function DirectoryScreen() {
@@ -46,402 +41,123 @@ export default function DirectoryScreen() {
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
 
-  // Iwasan ang paulit-ulit na pagsulat ng parehong data.
-  const lastSavedDataRef = useRef(null);
-
   useEffect(() => {
-    let isMounted = true;
+    let active = true;
+    let unsubscribe;
+    let savedData = [];
 
-    // 1. I-load muna ang local cache para may data kahit offline.
-    const loadCachedData = async () => {
+    const start = async () => {
       try {
-        const cachedHotlines = await AsyncStorage.getItem(CACHE_KEY);
-
-        if (cachedHotlines !== null && isMounted) {
-          const parsedData = JSON.parse(cachedHotlines);
-
-          if (Array.isArray(parsedData)) {
-            lastSavedDataRef.current = cachedHotlines;
-
-            if (parsedData.length > 0) {
-              setHotlines(parsedData);
-            }
-          } else {
-            console.warn('Cached hotlines format is invalid.');
+        const cached = await AsyncStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            savedData = parsed;
+            if (active) setHotlines(parsed);
           }
         }
-      } catch (error) {
-        console.warn('Unable to read cached hotlines:', error);
+      } catch (e) {
+        console.warn('Unable to load saved directory:', e);
       } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
+
+      if (!active) return;
+
+      unsubscribe = onSnapshot(
+        collection(db, 'hotlines'),
+        async (snapshot) => {
+          if (!active) return;
+
+          const fromCache = snapshot.metadata.fromCache;
+          const data = snapshot.docs.map(normalize).sort((a, b) => a.name.localeCompare(b.name));
+          setIsOffline(fromCache);
+
+          if (fromCache && savedData.length > data.length) return;
+
+          setHotlines(data);
+          savedData = data;
+
+          try {
+            await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(data));
+          } catch (e) {
+            console.warn('Unable to save directory:', e);
+          }
+        },
+        (error) => {
+          console.warn('Directory sync error:', error);
+          if (active) {
+            setIsOffline(true);
+            setLoading(false);
+          }
+        }
+      );
     };
 
-    loadCachedData();
-
-    // 2. Makinig sa Firestore updates.
-    const hotlinesQuery = query(
-      collection(db, 'hotlines'),
-      orderBy('name', 'asc')
-    );
-
-    const unsubscribe = onSnapshot(
-      hotlinesQuery,
-      { includeMetadataChanges: true },
-      async (snapshot) => {
-        if (!isMounted) return;
-
-        const fromCache = snapshot.metadata.fromCache;
-        setIsOffline(fromCache);
-
-        const data = snapshot.docs.map((document) => ({
-          id: document.id,
-          ...document.data(),
-        }));
-
-        // Huwag palitan ang existing data ng empty result.
-        if (data.length > 0) {
-          setHotlines(data);
-
-          // Cache lamang kapag galing sa server, hindi local Firestore cache.
-          if (!fromCache) {
-            try {
-              const serializedData = JSON.stringify(data);
-
-              // Skip kung pareho ang data na huling na-save.
-              if (serializedData !== lastSavedDataRef.current) {
-                await AsyncStorage.setItem(
-                  CACHE_KEY,
-                  serializedData
-                );
-
-                lastSavedDataRef.current = serializedData;
-              }
-            } catch (error) {
-              // Hindi dapat bumagsak ang Directory screen kapag puno ang storage.
-              console.warn(
-                'Unable to save hotline cache. Check device storage:',
-                error?.message || error
-              );
-            }
-          }
-        }
-
-        if (isMounted) {
-          setLoading(false);
-        }
-      },
-      (error) => {
-        console.error('Firestore hotline listener error:', error);
-
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    );
-
+    start();
     return () => {
-      isMounted = false;
-      unsubscribe();
+      active = false;
+      if (unsubscribe) unsubscribe();
     };
   }, []);
 
-  // Categories na para lamang sa Directory.
-  const normalizeCategory = (category) =>
-    String(category || '').trim().toLowerCase();
-
-  const policeStations = hotlines.filter(
-    (hotline) => normalizeCategory(hotline.category) === 'police'
-  );
-
-  const barangays = hotlines.filter(
-    (hotline) => normalizeCategory(hotline.category) === 'barangay'
-  );
-
-  const otherHotlines = hotlines.filter((hotline) => {
-    const category = normalizeCategory(hotline.category);
-
-    // "other" ay kasama para sa mga lumang record na
-    // na-save bago inayos ang admin category value.
-    return (
-      category === 'other emergency hotlines' ||
-      category === 'other'
-    );
-  });
-
-  // Static emergency contacts.
-  const emergency911 = {
-    name: '911',
-    number: '911',
-    logo: require('../assets/paynal_911.png'),
-  };
-
-  const ocpoHotline = {
-    name: 'Olongapo CPO',
-    number: '09985985546',
-    logo: require('../assets/OCPO.png'),
-  };
-
   const callNumber = async (number) => {
-    if (!number) {
-      console.warn('No hotline number is available.');
-      return;
-    }
-
+    if (!number) return;
     try {
-      await Linking.openURL(`tel:${number}`);
-    } catch (error) {
-      console.warn('Unable to open phone dialer:', error);
+      await Linking.openURL(`tel:${String(number).replace(/[^\d+*#,;]/g, '')}`);
+    } catch (e) {
+      console.warn('Unable to open phone dialer:', e);
     }
   };
 
-  // Gumawa ng grid na may tatlong columns.
-  const renderGrid = (items, columns = 3) => {
+  const police = hotlines.filter((h) => h.category === 'police');
+  const barangays = hotlines.filter((h) => h.category === 'barangay');
+  const others = hotlines.filter((h) => ['other', 'other emergency hotlines'].includes(h.category));
+
+  const renderGrid = (items) => {
     const rows = [];
+    for (let i = 0; i < items.length; i += 3) rows.push(items.slice(i, i + 3));
 
-    for (let i = 0; i < items.length; i += columns) {
-      const rowItems = items.slice(i, i + columns);
-
-      while (rowItems.length < columns) {
-        rowItems.push(null);
-      }
-
-      rows.push(rowItems);
-    }
-
-    return rows.map((row, rowIndex) => (
-      <View
-        key={`row-${rowIndex}`}
-        style={{
-          flexDirection: 'row',
-          justifyContent: 'flex-start',
-          marginBottom: 20,
-        }}
-      >
-        {row.map((item, index) =>
-          item ? (
-            <TouchableOpacity
-              key={item.id || `${rowIndex}-${index}`}
-              onPress={() => callNumber(item.number)}
-              style={{
-                alignItems: 'center',
-                flex: 1,
-                paddingHorizontal: 4,
-              }}
-            >
-              <SmartImage
-                uri={item.imageUrl}
-                defaultSource={require('../assets/OCPO.png')}
-                style={{
-                  width: 70,
-                  height: 70,
-                  marginBottom: 5,
-                  borderWidth: 1,
-                  borderColor: '#000',
-                  borderRadius: 10,
-                  backgroundColor: '#f9f9f9',
-                }}
-              />
-
-              <Text
-                style={{
-                  fontSize: 12,
-                  fontWeight: 'bold',
-                  textAlign: 'center',
-                }}
-              >
-                {item.name || 'Hotline'}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <View
-              key={`empty-${rowIndex}-${index}`}
-              style={{ flex: 1 }}
-            />
-          )
-        )}
+    return rows.map((row, ri) => (
+      <View key={ri} style={{ flexDirection: 'row', marginBottom: 20 }}>
+        {row.map((item) => (
+          <TouchableOpacity key={item.id} onPress={() => callNumber(item.number)} style={styles.tile}>
+            <SmartImage uri={item.imageUrl} />
+            <Text style={styles.label}>{item.name}</Text>
+          </TouchableOpacity>
+        ))}
+        {Array.from({ length: 3 - row.length }, (_, i) => <View key={`empty-${ri}-${i}`} style={{ flex: 1 }} />)}
       </View>
     ));
   };
 
   if (loading) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: '#fff',
-        }}
-      >
-        <ActivityIndicator size="large" color="#0047AB" />
-        <Text style={{ marginTop: 10 }}>
-          Accessing Directory...
-        </Text>
-      </View>
-    );
+    return <View style={styles.center}><ActivityIndicator size="large" color="#0047AB" /><Text style={{ marginTop: 10 }}>Accessing Directory...</Text></View>;
   }
 
   return (
-    <ScrollView
-      style={{
-        flex: 1,
-        paddingHorizontal: 20,
-        paddingTop: 70,
-        backgroundColor: '#fff',
-      }}
-      contentContainerStyle={{ paddingBottom: 100 }}
-    >
-      {isOffline && (
-        <View
-          style={{
-            backgroundColor: '#FF8C00',
-            padding: 5,
-            borderRadius: 5,
-            marginBottom: 10,
-          }}
-        >
-          <Text
-            style={{
-              color: '#fff',
-              textAlign: 'center',
-              fontSize: 10,
-              fontWeight: 'bold',
-            }}
-          >
-            OFFLINE MODE - USING CACHED DATA
-          </Text>
-        </View>
-      )}
+    <ScrollView style={styles.page} contentContainerStyle={{ paddingBottom: 100 }}>
+      {isOffline && <View style={styles.offline}><Text style={styles.offlineText}>OFFLINE MODE - USING SAVED DATA</Text></View>}
 
-      <View
-        style={{
-          alignItems: 'center',
-          marginBottom: 10,
-          marginTop: -20,
-        }}
-      >
-        <Text
-          style={{
-            fontSize: 18,
-            fontWeight: 'bold',
-            color: '#333',
-            textAlign: 'center',
-          }}
-        >
-          Welcome to{' '}
-          <Text style={{ color: '#000' }}>
-            Olongapo City Emergency Hotlines
-          </Text>
-        </Text>
-      </View>
+      <Text style={{ fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'center', marginBottom: 10 }}>
+        Welcome to{' '}
+        <Text style={{ color: '#000' }}>Olongapo City Emergency Hotlines</Text>
+      </Text>
 
-      <TouchableOpacity
-        onPress={() => callNumber(emergency911.number)}
-        style={{ alignItems: 'center', marginBottom: 20 }}
-      >
-        <Image
-          source={emergency911.logo}
-          style={{
-            width: 200,
-            height: 200,
-            marginTop: -10,
-            resizeMode: 'contain',
-          }}
-        />
-
-        <Text
-          style={{
-            fontSize: 25,
-            fontWeight: 'bold',
-            textAlign: 'center',
-            marginTop: -5,
-          }}
-        >
-          {emergency911.name}
-        </Text>
+      <TouchableOpacity onPress={() => callNumber('911')} style={{ alignItems: 'center', marginBottom: 20 }}>
+        <Image source={require('../assets/paynal_911.png')} style={{ width: 200, height: 200, marginTop: -10, resizeMode: 'contain' }} />
+        <Text style={{ fontSize: 25, fontWeight: 'bold', textAlign: 'center', marginTop: -5 }}>911</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={() => callNumber(ocpoHotline.number)}
-        style={{ alignItems: 'center', marginBottom: 30 }}
-      >
-        <Image
-          source={ocpoHotline.logo}
-          style={{
-            width: 160,
-            height: 160,
-            resizeMode: 'contain',
-          }}
-        />
-
-        <Text
-          style={{
-            fontSize: 16,
-            fontWeight: 'bold',
-            textAlign: 'center',
-            marginTop: -30,
-          }}
-        >
-          {ocpoHotline.name}
-        </Text>
+      <TouchableOpacity onPress={() => callNumber('09985985546')} style={{ alignItems: 'center', marginBottom: 30 }}>
+        <Image source={require('../assets/OCPO.png')} style={{ width: 160, height: 160, resizeMode: 'contain' }} />
+        <Text style={{ fontSize: 16, fontWeight: 'bold', textAlign: 'center', marginTop: -30 }}>Olongapo CPO</Text>
       </TouchableOpacity>
 
-      {policeStations.length > 0 && (
-        <>
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: 'bold',
-              textAlign: 'center',
-              marginBottom: 30,
-              marginTop: 20,
-            }}
-          >
-            POLICE STATIONS
-          </Text>
-
-          {renderGrid(policeStations)}
-        </>
-      )}
-
-      {otherHotlines.length > 0 && (
-        <>
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: 'bold',
-              textAlign: 'center',
-              marginTop: 50,
-              marginBottom: 30,
-            }}
-          >
-            OTHER EMERGENCY HOTLINES
-          </Text>
-
-          {renderGrid(otherHotlines)}
-        </>
-      )}
-
-      {barangays.length > 0 && (
-        <>
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: 'bold',
-              textAlign: 'center',
-              marginTop: 50,
-              marginBottom: 30,
-            }}
-          >
-            BARANGAYS
-          </Text>
-
-          {renderGrid(barangays)}
-        </>
-      )}
+      {police.length > 0 && <><Text style={styles.heading}>POLICE STATIONS</Text>{renderGrid(police)}</>}
+      {others.length > 0 && <><Text style={[styles.heading, { marginTop: 50 }]}>OTHER EMERGENCY HOTLINES</Text>{renderGrid(others)}</>}
+      {barangays.length > 0 && <><Text style={[styles.heading, { marginTop: 50 }]}>BARANGAYS</Text>{renderGrid(barangays)}</>}
+      {!hotlines.length && <Text style={{ textAlign: 'center', marginTop: 20 }}>No saved contacts available. Connect to the internet to load the directory.</Text>}
     </ScrollView>
   );
 }

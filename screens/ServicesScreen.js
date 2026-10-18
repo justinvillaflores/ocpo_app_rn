@@ -1,28 +1,32 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  View, Text, Modal, TouchableOpacity, ScrollView,
-  StyleSheet, Image, Linking, TextInput, ActivityIndicator,
-} from 'react-native';
+import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, Image, Linking, TextInput, ActivityIndicator, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { db } from '../firebaseConfig';
-import {
-  collection, onSnapshot, query, orderBy,
-  addDoc, serverTimestamp,
-} from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const CACHE_KEY = '@services_hotlines_cache';
 const QUEUE_KEY = '@offline_feedback_queue';
+const DEFAULT_LOGO = require('../assets/pnp.png');
 
-const SmartImage = ({ uri, defaultSource, style }) => {
+const normalize = (doc) => {
+  const d = doc.data();
+  return {
+    ...d,
+    id: doc.id,
+    name: d.name || d.title || d.serviceName || d.hotlineName || 'Service',
+    category: String(d.category || d.type || '').trim().toLowerCase(),
+    number: d.number || d.phoneNumber || d.contactNumber || d.hotlineNumber || d.phone || '',
+    url: d.url || d.link || d.website || d.webUrl || '',
+    imageUrl: d.imageUrl || d.logoUrl || d.image || d.logo || d.photoURL || null,
+  };
+};
+
+const SmartImage = ({ uri, style }) => {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [uri]);
-
-  return !uri || failed
-    ? <Image source={defaultSource} style={style} />
-    : <Image source={{ uri }} style={style}
-        onError={() => setFailed(true)} />;
+  return <Image source={uri && !failed ? { uri } : DEFAULT_LOGO} style={style} onError={() => setFailed(true)} />;
 };
 
 export default function ServicesScreen() {
@@ -34,17 +38,18 @@ export default function ServicesScreen() {
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
   const savedRef = useRef(null);
+  const savedDataRef = useRef([]);
   const syncingRef = useRef(false);
 
-  // Best-effort cache: hindi hahadlang sa screen kapag puno ang storage.
   const saveCache = async (data) => {
     try {
       const json = JSON.stringify(data);
-      if (json === savedRef.current) return;
-      await AsyncStorage.setItem(CACHE_KEY, json);
-      savedRef.current = json;
+      if (json !== savedRef.current) {
+        await AsyncStorage.setItem(CACHE_KEY, json);
+        savedRef.current = json;
+      }
     } catch (e) {
-      console.warn('Services cache unavailable:', e?.message);
+      console.warn('Services cache save failed:', e?.message);
     }
   };
 
@@ -67,7 +72,6 @@ export default function ServicesScreen() {
           createdAt: serverTimestamp(),
           syncedFromOffline: true,
         });
-
         queue.shift();
         await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
       }
@@ -82,159 +86,117 @@ export default function ServicesScreen() {
 
   useEffect(() => {
     let active = true;
+    let unsubscribeData;
 
-    const loadCache = async () => {
+    const start = async () => {
       try {
         const cached = await AsyncStorage.getItem(CACHE_KEY);
-        if (!active || !cached) return;
-
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed)) {
-          savedRef.current = cached;
-          setAllData(parsed);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            savedRef.current = cached;
+            savedDataRef.current = parsed;
+            if (active) setAllData(parsed);
+          }
         }
       } catch (e) {
-        console.warn('Cache read failed:', e?.message);
-      } finally {
-        if (active) setLoading(false);
+        console.warn('Services cache read failed:', e?.message);
       }
+
+      if (!active) return;
+      setLoading(false);
+
+      unsubscribeData = onSnapshot(
+        collection(db, 'hotlines'),
+        { includeMetadataChanges: true },
+        async (snapshot) => {
+          if (!active) return;
+
+          const fromCache = snapshot.metadata.fromCache;
+          const remoteData = snapshot.docs.map(normalize);
+          let data;
+
+          if (fromCache) {
+            const merged = new Map(savedDataRef.current.map((item) => [item.id, item]));
+            remoteData.forEach((item) => {
+              merged.set(item.id, { ...merged.get(item.id), ...item });
+            });
+            data = [...merged.values()];
+          } else {
+            data = remoteData;
+          }
+
+          data.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+          setIsOffline(fromCache);
+          setAllData(data);
+
+          if (!fromCache) {
+            savedDataRef.current = data;
+            await saveCache(data);
+          }
+        },
+        (e) => {
+          console.warn('Firebase services error:', e?.message);
+          if (active) {
+            setIsOffline(true);
+            setLoading(false);
+          }
+        }
+      );
     };
 
-    loadCache();
-
     const unsubscribeNet = NetInfo.addEventListener((state) => {
-      if (state.isConnected && state.isInternetReachable !== false) {
-        syncFeedback();
-      }
+      if (state.isConnected && state.isInternetReachable !== false) syncFeedback();
     });
 
-    const q = query(collection(db, 'hotlines'), orderBy('name', 'asc'));
-    const unsubscribeData = onSnapshot(
-      q,
-      { includeMetadataChanges: true },
-      (snapshot) => {
-        if (!active) return;
-
-        setIsOffline(snapshot.metadata.fromCache);
-        const data = snapshot.docs.map((d) => ({
-          id: d.id, ...d.data(),
-        }));
-
-        // Empty server results are valid; huwag mag-iwan ng lumang data.
-        setAllData(data);
-        if (!snapshot.metadata.fromCache) saveCache(data);
-        setLoading(false);
-      },
-      (e) => {
-        console.warn('Firebase services error:', e?.message);
-        if (active) setLoading(false);
-      }
-    );
+    start();
 
     return () => {
       active = false;
       unsubscribeNet();
-      unsubscribeData();
+      unsubscribeData?.();
     };
   }, []);
 
-  // Normalize category values for reliable filtering.
-  const categoryOf = (item) =>
-    String(item.category || '').trim().toLowerCase();
+  const categoryOf = (item) => String(item.category || '').trim().toLowerCase();
 
-  // Categories na para lamang sa Services screen.
   const sections = [
-    {
-      title: 'Report',
-      items: allData.filter(
-        (item) => categoryOf(item) === 'report'
-      ),
-    },
-    {
-      title: 'Services',
-      items: allData.filter(
-        (item) => categoryOf(item) === 'services'
-      ),
-    },
-    {
-      title: 'Other Pages',
-      items: allData.filter(
-        (item) => categoryOf(item) === 'other pages'
-      ),
-    },
-    {
-      title: 'Pages',
-      items: allData.filter(
-        (item) => {
-          const category = categoryOf(item);
-          return category === 'page' || category === 'pages';
-        }
-      ),
-    },
-    {
-      title: 'CCTV Stream',
-      items: allData.filter(
-        (item) => {
-          const category = categoryOf(item);
-
-          // Support both new and old saved CCTV category values.
-          return (
-            category === 'cctv stream' ||
-            category.includes('cctv')
-          );
-        }
-      ),
-    },
+    { title: 'Report', items: allData.filter((x) => categoryOf(x) === 'report') },
+    { title: 'Services', items: allData.filter((x) => categoryOf(x) === 'services') },
+    { title: 'Other Pages', items: allData.filter((x) => categoryOf(x) === 'other pages') },
+    { title: 'Pages', items: allData.filter((x) => ['page', 'pages'].includes(categoryOf(x))) },
+    { title: 'CCTV Stream', items: allData.filter((x) => categoryOf(x).includes('cctv')) },
   ];
 
-  const badWords = [
-    'putangina', 'puta', 'gago', 'tanga', 'bobo', 'ulol',
-    'leche', 'pakyu', 'siraulo', 'bwisit', 'bugok', 'yawa',
-    'nigger', 'put4ngina', 't4ngina', 'b0b0', '8080',
-  ];
+  const badWords = ['putangina', 'puta', 'gago', 'tanga', 'bobo', 'ulol', 'leche', 'pakyu', 'siraulo', 'bwisit', 'bugok', 'yawa', 'nigger', 'put4ngina', 't4ngina', 'b0b0', '8080'];
 
   const hasBadWords = (value) => {
-    const normalized = value.toLowerCase()
-      .replace(/4/g, 'a').replace(/@/g, 'a')
-      .replace(/0/g, 'o').replace(/1/g, 'l')
-      .replace(/3/g, 'e').replace(/\*/g, '')
-      .replace(/\s/g, '');
-
-    return badWords.some((word) =>
-      normalized.includes(word.replace(/\s/g, ''))
-    );
+    const normalized = value.toLowerCase().replace(/4/g, 'a').replace(/@/g, 'a').replace(/0/g, 'o').replace(/1/g, 'l').replace(/3/g, 'e').replace(/\*/g, '').replace(/\s/g, '');
+    return badWords.some((word) => normalized.includes(word.replace(/\s/g, '')));
   };
 
   const submitFeedback = async () => {
     const score = Number(rating);
-    if (!Number.isInteger(score) || score < 1 || score > 5)
-      return alert('Please enter a rating from 1 to 5.');
-    if (!comment.trim())
-      return alert('Please enter your suggestion.');
-    if (hasBadWords(comment)) {
-      setWarningVisible(true);
-      return;
-    }
+    if (!Number.isInteger(score) || score < 1 || score > 5) return Alert.alert('Invalid Rating', 'Please enter a rating from 1 to 5.');
+    if (!comment.trim()) return Alert.alert('Missing Suggestion', 'Please enter your suggestion.');
+    if (hasBadWords(comment)) return setWarningVisible(true);
 
     const item = { rating: score, comment: comment.trim() };
 
     try {
       const state = await NetInfo.fetch();
-      const online = state.isConnected &&
-        state.isInternetReachable !== false;
+      const online = state.isConnected && state.isInternetReachable !== false;
 
       if (online) {
-        await addDoc(collection(db, 'feedback'), {
-          ...item, createdAt: serverTimestamp(),
-        });
-        alert('Thank you for your feedback!');
+        await addDoc(collection(db, 'feedback'), { ...item, createdAt: serverTimestamp() });
+        Alert.alert('Thank You', 'Your feedback has been submitted.');
       } else {
         const stored = await AsyncStorage.getItem(QUEUE_KEY);
         const queue = stored ? JSON.parse(stored) : [];
-        if (!Array.isArray(queue)) throw new Error('Invalid queue');
+        if (!Array.isArray(queue)) throw new Error('Invalid feedback queue');
         queue.push({ ...item, timestamp: new Date().toISOString() });
         await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
-        alert('Offline: feedback saved for later submission.');
+        Alert.alert('Saved Offline', 'Your feedback will be submitted when internet returns.');
       }
 
       setRating('');
@@ -242,23 +204,25 @@ export default function ServicesScreen() {
       setModalVisible(false);
     } catch (e) {
       console.warn('Feedback submission failed:', e?.message);
-      alert('Unable to submit or save feedback. Check device storage and connection.');
+      Alert.alert('Error', 'Unable to submit or save feedback. Check your connection and storage.');
     }
   };
 
   const openItem = async (item) => {
     const target = String(item.number || item.url || '').trim();
-    if (!target) return alert('No link or number is available.');
+    if (!target) return Alert.alert('Unavailable', 'No link or number is available.');
 
-    const url = /^https?:\/\//i.test(target) ? target
+    const url = /^https?:\/\//i.test(target)
+      ? target
       : /^[+\d][\d\s()-]*$/.test(target)
-        ? `tel:${target.replace(/[^\d+]/g, '')}` : target;
+        ? `tel:${target.replace(/[^\d+]/g, '')}`
+        : target;
 
     try {
       await Linking.openURL(url);
     } catch (e) {
-      console.warn('Unable to open item:', e?.message);
-      alert('Unable to open this link on your device.');
+      console.warn('Unable to open service:', e?.message);
+      Alert.alert('Unable to Open', 'This link or number cannot be opened on your device.');
     }
   };
 
@@ -277,14 +241,9 @@ export default function ServicesScreen() {
           const cctv = categoryOf(item).includes('cctv');
 
           return (
-            <TouchableOpacity key={item.id || `${r}-${i}`}
-              onPress={() => openItem(item)} style={styles.gridItem}>
-              <SmartImage uri={item.imageUrl}
-                defaultSource={require('../assets/pnp.png')}
-                style={[styles.image, cctv && styles.cctvImage]} />
-              <Text style={[styles.itemName, cctv && styles.cctvName]}>
-                {item.name || 'Service'}
-              </Text>
+            <TouchableOpacity key={item.id || `${r}-${i}`} onPress={() => openItem(item)} style={styles.gridItem}>
+              <SmartImage uri={item.imageUrl} style={[styles.image, cctv && styles.cctvImage]} />
+              <Text style={[styles.itemName, cctv && styles.cctvName]}>{item.name || 'Service'}</Text>
             </TouchableOpacity>
           );
         })}
@@ -292,22 +251,16 @@ export default function ServicesScreen() {
     ));
   };
 
-  if (loading) return (
-    <View style={styles.loading}>
-      <ActivityIndicator size="large" color="#0047AB" />
-      <Text style={styles.loadingText}>Loading Services...</Text>
-    </View>
-  );
+  if (loading) {
+    return <View style={styles.loading}><ActivityIndicator size="large" color="#0047AB" /><Text style={styles.loadingText}>Loading Services...</Text></View>;
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {isOffline && <View style={styles.offline}>
-        <Text style={styles.offlineText}>OFFLINE MODE - CACHED DATA</Text>
-      </View>}
+      {isOffline && <View style={styles.offline}><Text style={styles.offlineText}>OFFLINE MODE - SAVED DATA</Text></View>}
 
-      <View style={styles.banner}>ot
-        <Image source={require('../assets/ocposervices.png')}
-          style={styles.bannerImage} />
+      <View style={styles.banner}>
+        <Image source={require('../assets/ocposervices.png')} style={styles.bannerImage} />
       </View>
 
       {sections.map((section) => section.items.length > 0 && (
@@ -317,52 +270,36 @@ export default function ServicesScreen() {
         </View>
       ))}
 
-      <TouchableOpacity onPress={() => setModalVisible(true)}
-        style={styles.feedbackBtn}>
+      {!allData.length && <Text style={styles.empty}>No saved services yet. Connect to the internet to load services.</Text>}
+
+      <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.feedbackBtn}>
         <Text style={styles.feedbackBtnText}>Give Feedback</Text>
       </TouchableOpacity>
 
-      <Modal visible={modalVisible} transparent animationType="slide"
-        onRequestClose={() => setModalVisible(false)}>
+      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <View style={styles.overlay}>
           <View style={styles.modal}>
             <ScrollView contentContainerStyle={styles.modalContent}>
               <Text style={styles.modalTitle}>Submit Feedback</Text>
               <Text>Rate the App (1 to 5):</Text>
-              <TextInput value={rating} onChangeText={setRating}
-                keyboardType="numeric" style={styles.input} placeholder="e.g. 5" />
+              <TextInput value={rating} onChangeText={setRating} keyboardType="numeric" style={styles.input} placeholder="e.g. 5" />
               <Text style={styles.suggestion}>Your Suggestion:</Text>
-              <TextInput value={comment} onChangeText={setComment}
-                multiline style={[styles.input, styles.comment]}
-                placeholder="Tell us what you think..." />
-
+              <TextInput value={comment} onChangeText={setComment} multiline style={[styles.input, styles.comment]} placeholder="Tell us what you think..." />
               <View style={styles.buttonRow}>
-                <TouchableOpacity onPress={() => setModalVisible(false)}
-                  style={[styles.button, styles.cancel]}>
-                  <Text style={styles.buttonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={submitFeedback}
-                  style={[styles.button, styles.submit]}>
-                  <Text style={styles.buttonText}>Submit</Text>
-                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setModalVisible(false)} style={[styles.button, styles.cancel]}><Text style={styles.buttonText}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity onPress={submitFeedback} style={[styles.button, styles.submit]}><Text style={styles.buttonText}>Submit</Text></TouchableOpacity>
               </View>
             </ScrollView>
           </View>
         </View>
       </Modal>
 
-      <Modal visible={warningVisible} transparent animationType="fade"
-        onRequestClose={() => setWarningVisible(false)}>
+      <Modal visible={warningVisible} transparent animationType="fade" onRequestClose={() => setWarningVisible(false)}>
         <View style={styles.overlay}>
           <View style={styles.warning}>
             <Text style={styles.warningTitle}>Inappropriate Language Detected!</Text>
-            <Text style={styles.warningMessage}>
-              Please remove inappropriate words from your feedback.
-            </Text>
-            <TouchableOpacity onPress={() => setWarningVisible(false)}
-              style={[styles.button, styles.dismiss]}>
-              <Text style={styles.buttonText}>Dismiss Warning</Text>
-            </TouchableOpacity>
+            <Text style={styles.warningMessage}>Please remove inappropriate words from your feedback.</Text>
+            <TouchableOpacity onPress={() => setWarningVisible(false)} style={[styles.button, styles.dismiss]}><Text style={styles.buttonText}>Dismiss Warning</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -386,6 +323,7 @@ const styles = StyleSheet.create({
   cctvImage: { width: 150, height: 150, borderRadius: 15 },
   itemName: { fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
   cctvName: { fontSize: 14, width: 150 },
+  empty: { textAlign: 'center', marginTop: 20, color: '#555' },
   feedbackBtn: { backgroundColor: '#0d6efd', paddingVertical: 12, borderRadius: 8, marginTop: 80, marginBottom: 20, alignItems: 'center' },
   feedbackBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
