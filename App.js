@@ -1,15 +1,18 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Modal, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import {
+  View, Text, Modal, ScrollView, TouchableOpacity,
+  StyleSheet, ActivityIndicator,
+} from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { auth, db } from './firebaseConfig';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { auth, db } from './firebaseConfig';
 import DirectoryScreen from './screens/DirectoryScreen';
 import ServicesScreen from './screens/ServicesScreen';
 import MessagesScreen from './screens/MessagesScreen';
@@ -23,7 +26,10 @@ const Tab = createBottomTabNavigator();
 
 function MainTabs() {
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <CustomTabBar {...props} />}>
+    <Tab.Navigator
+      screenOptions={{ headerShown: false }}
+      tabBar={(props) => <CustomTabBar {...props} />}
+    >
       <Tab.Screen name="Directory" component={DirectoryScreen} />
       <Tab.Screen name="Services" component={ServicesScreen} />
       <Tab.Screen name="Messages" component={MessagesScreen} />
@@ -33,54 +39,69 @@ function MainTabs() {
   );
 }
 
-// Linisin at pag-isahin ang address components.
 function cleanAddress(value) {
   if (typeof value !== 'string') return '';
-  return value.trim().replace(/\s+/g, ' ');
+
+  const text = value.trim().replace(/\s+/g, ' ');
+
+  // Huwag ituring na address ang plus code.
+  if (/^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,}$/i.test(text)) {
+    return '';
+  }
+
+  return text;
 }
 
 function sameArea(a, b) {
-  return cleanAddress(a).toLowerCase() === cleanAddress(b).toLowerCase();
+  const first = cleanAddress(a).toLowerCase();
+  const second = cleanAddress(b).toLowerCase();
+  return Boolean(first && second && first === second);
 }
 
 function getLocationAddress(place) {
-  if (!place) {
-    return { street: '', barangay: '' };
-  }
+  if (!place) return { street: '', barangay: '' };
 
-  const street = [
-    cleanAddress(place.streetNumber),
-    cleanAddress(place.street)
-  ].filter(Boolean).join(' ');
-
+  const city = cleanAddress(place.city);
   const province = cleanAddress(place.subregion);
   const region = cleanAddress(place.region);
-  const city = cleanAddress(place.city);
   const streetName = cleanAddress(place.street);
-  const district = cleanAddress(place.district);
-  const subLocality = cleanAddress(place.subLocality);
-  const name = cleanAddress(place.name);
+  const streetNumber = cleanAddress(place.streetNumber);
 
-  // Huwag gamitin ang province o region bilang barangay.
+  const street = [streetNumber, streetName].filter(Boolean).join(' ');
+
   const validBarangay = (value) => {
-    if (!value) return '';
-    if (sameArea(value, province) || sameArea(value, region) || sameArea(value, city)) return '';
-    if (sameArea(value, streetName) || sameArea(value, street)) return '';
-    return value;
+    const candidate = cleanAddress(value);
+    if (!candidate) return '';
+
+    if (
+      sameArea(candidate, city) ||
+      sameArea(candidate, province) ||
+      sameArea(candidate, region) ||
+      sameArea(candidate, streetName) ||
+      sameArea(candidate, street)
+    ) {
+      return '';
+    }
+
+    return candidate;
   };
 
-  const barangay = validBarangay(district) ||
-    validBarangay(subLocality) ||
-    validBarangay(name) || '';
+  const barangay =
+    validBarangay(place.subLocality) ||
+    validBarangay(place.district) ||
+    '';
 
   return { street, barangay };
 }
 
 async function getAddressFromCoordinates(latitude, longitude) {
   try {
-    const results = await Location.reverseGeocodeAsync({ latitude, longitude });
-    const place = results?.[0];
-    return getLocationAddress(place);
+    const results = await Location.reverseGeocodeAsync({
+      latitude,
+      longitude,
+    });
+
+    return getLocationAddress(results?.[0]);
   } catch (error) {
     console.log('Reverse geocoding error:', error);
     return { street: '', barangay: '' };
@@ -88,19 +109,21 @@ async function getAddressFromCoordinates(latitude, longitude) {
 }
 
 async function saveUserLocation(uid, coords) {
-  const latitude = coords.latitude;
-  const longitude = coords.longitude;
+  const { latitude, longitude } = coords;
 
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+  if (
+    !Number.isFinite(latitude) ||
+    !Number.isFinite(longitude)
+  ) return;
 
   const address = await getAddressFromCoordinates(latitude, longitude);
 
   await setDoc(doc(db, 'users', uid), {
     lastKnownLat: latitude,
     lastKnownLon: longitude,
-    lastKnownStreet: address.street || '',
-    lastKnownBarangay: address.barangay || '',
-    lastLocationUpdate: serverTimestamp()
+    lastKnownStreet: address.street,
+    lastKnownBarangay: address.barangay,
+    lastLocationUpdate: serverTimestamp(),
   }, { merge: true });
 }
 
@@ -114,16 +137,11 @@ export default function App() {
   useEffect(() => {
     let mounted = true;
 
-    const initialize = async () => {
-      try {
-        const agreed = await AsyncStorage.getItem('hasAgreedToNotice');
+    AsyncStorage.getItem('hasAgreedToNotice')
+      .then((agreed) => {
         if (mounted && agreed !== 'true') setShowNotice(true);
-      } catch (error) {
-        console.log('Notice loading error:', error);
-      }
-    };
-
-    initialize();
+      })
+      .catch((error) => console.log('Notice loading error:', error));
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
       if (!mounted) return;
@@ -131,7 +149,7 @@ export default function App() {
       setUser(currentUser);
       setInitializing(false);
 
-      if (activeUid.current !== currentUser?.uid) {
+      if (activeUid.current !== (currentUser?.uid || null)) {
         locationSubscription.current?.remove();
         locationSubscription.current = null;
         activeUid.current = currentUser?.uid || null;
@@ -140,11 +158,16 @@ export default function App() {
       if (!currentUser || locationSubscription.current) return;
 
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted' || !mounted || auth.currentUser?.uid !== currentUser.uid) return;
+        const permission = await Location.requestForegroundPermissionsAsync();
+
+        if (
+          permission.status !== 'granted' ||
+          !mounted ||
+          auth.currentUser?.uid !== currentUser.uid
+        ) return;
 
         const initialLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High
+          accuracy: Location.Accuracy.High,
         });
 
         await saveUserLocation(currentUser.uid, initialLocation.coords);
@@ -154,7 +177,7 @@ export default function App() {
         locationSubscription.current = await Location.watchPositionAsync({
           accuracy: Location.Accuracy.High,
           timeInterval: 10000,
-          distanceInterval: 10
+          distanceInterval: 10,
         }, async (location) => {
           try {
             if (auth.currentUser?.uid !== currentUser.uid) return;
@@ -186,7 +209,11 @@ export default function App() {
   };
 
   if (initializing) {
-    return <View style={styles.loading}><ActivityIndicator size="large" color="#003399" /></View>;
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color="#003399" />
+      </View>
+    );
   }
 
   return (
@@ -197,28 +224,21 @@ export default function App() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.title}>Notice to the Public</Text>
               <Text style={styles.body}>
-                Welcome to the Olongapo City Hotlines mobile application. Please read this disclaimer before continuing.
+                Welcome to the Olongapo City Hotlines mobile application.
+                Please read this disclaimer before continuing.
               </Text>
-              <Text style={styles.body}>
-                <Text style={styles.bold}>1. General Information: </Text>
-                This app provides access to emergency contact numbers and public service hotlines. Information may not always be complete or up to date.
-              </Text>
-              <Text style={styles.body}>
-                <Text style={styles.bold}>2. Service Limitations: </Text>
-                Some features require internet access, GPS permission, or third-party services. Hotline access may remain available offline.
-              </Text>
-              <Text style={styles.body}>
-                <Text style={styles.bold}>3. Third-Party Services: </Text>
-                External websites and services are not controlled by the developers.
-              </Text>
-              <Text style={styles.body}>
-                <Text style={styles.bold}>4. Emergency Use: </Text>
-                This app does not replace official emergency hotlines. Call the appropriate emergency number directly when urgent assistance is needed.
-              </Text>
-              <Text style={styles.body}>
-                <Text style={styles.bold}>5. Data Privacy: </Text>
-                Location and other submitted information may be processed to support app features. Use location sharing only with the required permission.
-              </Text>
+              {[
+                ['1. General Information: ', 'This app provides access to emergency contact numbers and public service hotlines. Information may not always be complete or up to date.'],
+                ['2. Service Limitations: ', 'Some features require internet access, GPS permission, or third-party services. Hotline access may remain available offline.'],
+                ['3. Third-Party Services: ', 'External websites and services are not controlled by the developers.'],
+                ['4. Emergency Use: ', 'This app does not replace official emergency hotlines. Call the appropriate emergency number directly when urgent assistance is needed.'],
+                ['5. Data Privacy: ', 'Location and other submitted information may be processed to support app features. Use location sharing only with the required permission.'],
+              ].map(([heading, description]) => (
+                <Text style={styles.body} key={heading}>
+                  <Text style={styles.bold}>{heading}</Text>
+                  {description}
+                </Text>
+              ))}
               <Text style={styles.body}>
                 By continuing, you acknowledge that you have read this notice.
               </Text>
@@ -249,5 +269,5 @@ const styles = StyleSheet.create({
   body: { fontSize: 13, marginBottom: 12, lineHeight: 18, color: '#444', textAlign: 'justify' },
   bold: { fontWeight: 'bold', color: '#000' },
   button: { backgroundColor: '#003399', alignSelf: 'center', paddingHorizontal: 50, paddingVertical: 12, borderRadius: 25, marginVertical: 10 },
-  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 }
+  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
 });

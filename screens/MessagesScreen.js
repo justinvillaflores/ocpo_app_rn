@@ -57,7 +57,6 @@ export default function MessagesScreen() {
 
   const flatListRef = useRef(null);
 
-  // Monitor internet and authentication
   useEffect(() => {
     const unsubscribeNet = NetInfo.addEventListener(state => {
       setIsConnected(state.isConnected ?? true);
@@ -74,7 +73,6 @@ export default function MessagesScreen() {
     };
   }, []);
 
-  // Load citizen profile
   useEffect(() => {
     if (!user) return;
 
@@ -88,7 +86,6 @@ export default function MessagesScreen() {
       .catch(error => console.log('Profile error:', error));
   }, [user]);
 
-  // Load responders and local cache
   useEffect(() => {
     if (!user) return;
     let mounted = true;
@@ -154,7 +151,6 @@ export default function MessagesScreen() {
     };
   }, [user]);
 
-  // Listen for messages in the selected chat
   useEffect(() => {
     if (!inChat || !selectedContact || !user) return;
 
@@ -175,7 +171,6 @@ export default function MessagesScreen() {
     return () => unsubscribe();
   }, [inChat, selectedContact, user]);
 
-  // Select responder; incident type must be selected first
   const handleSelectResponder = item => {
     if (!user) {
       Alert.alert('Login Required', 'Please log in before starting a chat.');
@@ -192,7 +187,6 @@ export default function MessagesScreen() {
     setShowIncidentModal(true);
   };
 
-  // Save incident and open chat
   const handleContinueToChat = async () => {
     if (!user || !pendingResponder || !selectedIncidentType) {
       Alert.alert('Required', 'Please select an incident type first.');
@@ -230,7 +224,6 @@ export default function MessagesScreen() {
     setSelectedIncidentType(null);
   };
 
-  // SMS fallback when internet is unavailable
   const handleSendSMS = async textToSend => {
     const phone = selectedContact?.phoneNumber || selectedContact?.phone;
 

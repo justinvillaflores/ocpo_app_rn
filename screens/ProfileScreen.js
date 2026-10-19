@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, ActivityIndicator, Share, Modal } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,11 +22,20 @@ const helpSteps = [
   ['call-outline', '3. Direct Hotline Call', 'Use the direct dial buttons to contact emergency services.'],
 ];
 
+const privacySections = [
+  ['Personal Information', 'OneCall may store your name, contact number, email address, address, and other information needed to support account management and emergency services.'],
+  ['Purpose of Use', 'Your information is used to manage your account, support emergency assistance, and provide relevant app functions such as location support.'],
+  ['Access and Sharing', 'Personal information should only be accessed by authorized personnel for legitimate system or emergency-response purposes. It should not be shared with unauthorized persons.'],
+  ['Security', 'OneCall should maintain appropriate technical and organizational safeguards, including access restrictions. No system can guarantee absolute security.'],
+  ['Privacy Requests', 'For questions, correction requests, or concerns about your information, contact the appropriate OneCall administrator. Your rights are subject to applicable law.'],
+];
+
 export default function ProfileScreen() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -119,10 +129,7 @@ export default function ProfileScreen() {
   const InfoRow = ({ icon, label, value }) => (
     <View style={styles.infoRow}>
       <View style={styles.iconBox}><Ionicons name={icon} size={18} color="#0047AB" /></View>
-      <View style={styles.flex}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoText}>{value}</Text>
-      </View>
+      <View style={styles.flex}><Text style={styles.infoLabel}>{label}</Text><Text style={styles.infoText}>{value}</Text></View>
     </View>
   );
 
@@ -138,23 +145,20 @@ export default function ProfileScreen() {
           <Text style={styles.userName}>{name}</Text>
           <Text style={styles.userRole}>Citizen Account</Text>
           <View style={styles.divider} />
-          {info.map(([icon, label, value]) => (
-            <InfoRow key={label} icon={icon} label={label} value={value} />
-          ))}
+          {info.map(([icon, label, value]) => <InfoRow key={label} icon={icon} label={label} value={value} />)}
         </View>
 
         <TouchableOpacity style={styles.shareCard} onPress={shareApp}>
-          <View style={styles.shareIcon}>
-            <Ionicons name="share-social" size={24} color="#0047AB" />
-          </View>
-          <View style={styles.flex}>
-            <Text style={styles.shareTitle}>Share OneCall App</Text>
-            <Text style={styles.subText}>Help others stay prepared for emergencies.</Text>
-          </View>
+          <View style={styles.shareIcon}><Ionicons name="share-social" size={24} color="#0047AB" /></View>
+          <View style={styles.flex}><Text style={styles.shareTitle}>Share OneCall App</Text><Text style={styles.subText}>Help others stay prepared for emergencies.</Text></View>
           <Ionicons name="chevron-forward" size={20} color="#bbb" />
         </TouchableOpacity>
 
         <View style={styles.menuCard}>
+          <TouchableOpacity style={styles.menuItem} onPress={() => setShowPrivacyModal(true)}>
+            <Text style={styles.menuText}>♧   Data Privacy</Text>
+            <Ionicons name="chevron-forward" size={20} color="#ccc" />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.menuItem} onPress={() => setShowHelpModal(true)}>
             <Text style={styles.menuText}>ⓘ   Help & Support</Text>
             <Ionicons name="chevron-forward" size={20} color="#ccc" />
@@ -166,46 +170,38 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>OneCall Emergency System v1.0.0</Text>
-        <Text style={styles.footerSub}>Olongapo City Emergency Response</Text>
-      </View>
+      <View style={styles.footer}><Text style={styles.footerText}>OneCall Emergency System v1.0.0</Text><Text style={styles.footerSub}>Olongapo City Emergency Response</Text></View>
+
+      <Modal visible={showPrivacyModal} transparent animationType="slide" onRequestClose={() => setShowPrivacyModal(false)}>
+        <View style={styles.overlay}>
+          <View style={styles.helpModal}>
+            <View style={styles.modalHeader}><Text style={styles.modalHeading}>Data Privacy Notice</Text><TouchableOpacity onPress={() => setShowPrivacyModal(false)}><Ionicons name="close" size={22} color="#666" /></TouchableOpacity></View>
+            <ScrollView>
+              <Text style={styles.privacyIntro}>OneCall aims to handle personal information in accordance with the Data Privacy Act of 2012 (Republic Act No. 10173).</Text>
+              {privacySections.map(([title, body]) => (
+                <View style={styles.privacySection} key={title}><Text style={styles.guideTitle}>{title}</Text><Text style={styles.guideDesc}>{body}</Text></View>
+              ))}
+              <Text style={styles.privacyDisclaimer}>This notice describes the intended privacy practices of OneCall and should be reviewed and finalized by the project adviser or responsible data protection representative before deployment.</Text>
+            </ScrollView>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowPrivacyModal(false)}><Text style={styles.primaryBtnText}>Close Privacy Notice</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={showHelpModal} transparent animationType="slide" onRequestClose={() => setShowHelpModal(false)}>
         <View style={styles.overlay}>
           <View style={styles.helpModal}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalHeading}>Help & Support Center</Text>
-              <TouchableOpacity onPress={() => setShowHelpModal(false)}>
-                <Ionicons name="close" size={22} color="#666" />
-              </TouchableOpacity>
-            </View>
+            <View style={styles.modalHeader}><Text style={styles.modalHeading}>Help & Support Center</Text><TouchableOpacity onPress={() => setShowHelpModal(false)}><Ionicons name="close" size={22} color="#666" /></TouchableOpacity></View>
             <ScrollView>
               <Text style={styles.sectionTitle}>Emergency Reporting Guide</Text>
-              {helpSteps.map(([icon, title, desc]) => (
-                <View style={styles.guideStep} key={title}>
-                  <Ionicons name={icon} size={20} color="#0047AB" />
-                  <View style={styles.flex}>
-                    <Text style={styles.guideTitle}>{title}</Text>
-                    <Text style={styles.guideDesc}>{desc}</Text>
-                  </View>
-                </View>
-              ))}
+              {helpSteps.map(([icon, title, desc]) => <View style={styles.guideStep} key={title}><Ionicons name={icon} size={20} color="#0047AB" /><View style={styles.flex}><Text style={styles.guideTitle}>{title}</Text><Text style={styles.guideDesc}>{desc}</Text></View></View>)}
               <Text style={styles.sectionTitle}>Frequently Asked Questions</Text>
-              <View style={styles.faqCard}>
-                <Text style={styles.guideTitle}>Is OneCall available 24/7?</Text>
-                <Text style={styles.guideDesc}>Emergency hotlines may be available 24 hours a day, depending on the service.</Text>
-              </View>
-              <View style={styles.faqCard}>
-                <Text style={styles.guideTitle}>Can I use this without internet?</Text>
-                <Text style={styles.guideDesc}>Saved profile information and hotline details may be viewed offline. Internet is needed for online updates and real-time features.</Text>
-              </View>
+              <View style={styles.faqCard}><Text style={styles.guideTitle}>Is OneCall available 24/7?</Text><Text style={styles.guideDesc}>Emergency hotlines may be available 24 hours a day, depending on the service.</Text></View>
+              <View style={styles.faqCard}><Text style={styles.guideTitle}>Can I use this without internet?</Text><Text style={styles.guideDesc}>Saved profile information and hotline details may be viewed offline. Internet is needed for online updates and real-time features.</Text></View>
               <Text style={styles.sectionTitle}>Command Center Contact</Text>
               <Text style={styles.contactText}>For system concerns or updates, contact the appropriate local emergency office.</Text>
             </ScrollView>
-            <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowHelpModal(false)}>
-              <Text style={styles.primaryBtnText}>Close Help Center</Text>
-            </TouchableOpacity>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => setShowHelpModal(false)}><Text style={styles.primaryBtnText}>Close Help Center</Text></TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -217,12 +213,8 @@ export default function ProfileScreen() {
             <Text style={styles.modalHeading}>Confirm Logout</Text>
             <Text style={styles.logoutSub}>Are you sure you want to log out of your account?</Text>
             <View style={styles.buttons}>
-              <TouchableOpacity style={[styles.btn, styles.cancelBtn]} onPress={() => setShowLogoutModal(false)}>
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, styles.logoutBtn]} onPress={logout}>
-                <Text style={styles.primaryBtnText}>Logout</Text>
-              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.cancelBtn]} onPress={() => setShowLogoutModal(false)}><Text style={styles.cancelText}>Cancel</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.logoutBtn]} onPress={logout}><Text style={styles.primaryBtnText}>Logout</Text></TouchableOpacity>
             </View>
           </View>
         </View>
@@ -255,9 +247,9 @@ const styles = StyleSheet.create({
   footerText: { fontSize: 12, color: '#AAA', fontWeight: '600' },
   footerSub: { fontSize: 11, color: '#CCC', marginTop: 2 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  helpModal: { backgroundColor: '#fff', width: '90%', maxHeight: '80%', borderRadius: 24, padding: 20 },
+  helpModal: { backgroundColor: '#fff', width: '90%', maxHeight: '85%', borderRadius: 24, padding: 20 },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderBottomWidth: 1, borderBottomColor: '#F0F0F0', paddingBottom: 12, marginBottom: 12 },
-  modalHeading: { fontSize: 18, fontWeight: '800', color: '#1A1A1A' },
+  modalHeading: { fontSize: 18, fontWeight: '800', color: '#1A1A1A', flex: 1 },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: '#0047AB', marginVertical: 10 },
   guideStep: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 8 },
   guideTitle: { fontSize: 13, fontWeight: '700', color: '#1E293B' },
@@ -273,4 +265,7 @@ const styles = StyleSheet.create({
   cancelBtn: { backgroundColor: '#F0F2F5' },
   cancelText: { color: '#444', fontWeight: '700' },
   logoutBtn: { backgroundColor: '#D32F2F' },
+  privacyIntro: { fontSize: 13, lineHeight: 20, color: '#444', marginBottom: 15 },
+  privacySection: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, marginBottom: 10 },
+  privacyDisclaimer: { color: '#777', fontSize: 12, lineHeight: 18, marginVertical: 12 }
 });

@@ -19,7 +19,6 @@ export default function AnnounceScreen() {
   useEffect(() => {
     let isMounted = true;
 
-    // 1. Unang i-load ang na-cache na announcements mula sa AsyncStorage para agad na maipakita kahit offline
     const loadCachedAnnouncements = async () => {
       try {
         const cachedData = await AsyncStorage.getItem(ANNOUNCEMENTS_CACHE_KEY);
@@ -38,7 +37,6 @@ export default function AnnounceScreen() {
 
     loadCachedAnnouncements();
 
-    // 2. Real-time listener mula sa Firestore
     const colRef = collection(db, "announcements");
     const q = query(colRef, orderBy("createdAt", "desc"));
 
@@ -50,11 +48,9 @@ export default function AnnounceScreen() {
 
       const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-      // Palitan lamang ang state kung may nakuha talagang records
       if (list.length > 0) {
         setAnnouncements(list);
 
-        // Kapag nakuha nang live mula sa server, i-update ang local cache
         if (!fromCache) {
           try {
             await AsyncStorage.setItem(ANNOUNCEMENTS_CACHE_KEY, JSON.stringify(list));
