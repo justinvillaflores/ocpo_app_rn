@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet, Image, Linking, TextInput, ActivityIndicator, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -8,6 +7,7 @@ import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firest
 
 const CACHE_KEY = '@services_hotlines_cache';
 const QUEUE_KEY = '@offline_feedback_queue';
+const REQUEST_TIMEOUT = 15000;
 const DEFAULT_LOGO = require('../assets/pnp.png');
 
 const normalize = (doc) => {
@@ -19,7 +19,7 @@ const normalize = (doc) => {
     category: String(d.category || d.type || '').trim().toLowerCase(),
     number: d.number || d.phoneNumber || d.contactNumber || d.hotlineNumber || d.phone || '',
     url: d.url || d.link || d.website || d.webUrl || '',
-    imageUrl: d.imageUrl || d.logoUrl || d.image || d.logo || d.photoURL || null,
+    imageUrl: d.imageUrl || d.logoUrl || d.image || d.logo || d.photoURL || null
   };
 };
 
@@ -37,6 +37,8 @@ export default function ServicesScreen() {
   const [allData, setAllData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [retryKey, setRetryKey] = useState(0);
   const savedRef = useRef(null);
   const savedDataRef = useRef([]);
   const syncingRef = useRef(false);
@@ -70,7 +72,7 @@ export default function ServicesScreen() {
           rating: item.rating,
           comment: item.comment,
           createdAt: serverTimestamp(),
-          syncedFromOffline: true,
+          syncedFromOffline: true
         });
         queue.shift();
         await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
@@ -87,8 +89,22 @@ export default function ServicesScreen() {
   useEffect(() => {
     let active = true;
     let unsubscribeData;
+    let timeout;
+    let serverResponseReceived = false;
+    let settled = false;
+
+    const clearRequestTimeout = () => {
+      if (timeout) {
+        clearTimeout(timeout);
+        timeout = null;
+      }
+    };
 
     const start = async () => {
+      setLoading(true);
+      setLoadError(false);
+      setIsOffline(false);
+
       try {
         const cached = await AsyncStorage.getItem(CACHE_KEY);
         if (cached) {
@@ -96,7 +112,10 @@ export default function ServicesScreen() {
           if (Array.isArray(parsed)) {
             savedRef.current = cached;
             savedDataRef.current = parsed;
-            if (active) setAllData(parsed);
+            if (active && parsed.length > 0) {
+              setAllData(parsed);
+              setLoading(false);
+            }
           }
         }
       } catch (e) {
@@ -104,59 +123,111 @@ export default function ServicesScreen() {
       }
 
       if (!active) return;
-      setLoading(false);
 
-      unsubscribeData = onSnapshot(
-        collection(db, 'hotlines'),
-        { includeMetadataChanges: true },
-        async (snapshot) => {
-          if (!active) return;
+      timeout = setTimeout(() => {
+        if (!active || serverResponseReceived || settled) return;
 
-          const fromCache = snapshot.metadata.fromCache;
-          const remoteData = snapshot.docs.map(normalize);
-          let data;
+        settled = true;
+        setIsOffline(true);
+        setLoading(false);
 
-          if (fromCache) {
-            const merged = new Map(savedDataRef.current.map((item) => [item.id, item]));
-            remoteData.forEach((item) => {
-              merged.set(item.id, { ...merged.get(item.id), ...item });
-            });
-            data = [...merged.values()];
-          } else {
-            data = remoteData;
-          }
+        if (savedDataRef.current.length === 0) {
+          setLoadError(true);
+        }
+      }, REQUEST_TIMEOUT);
 
-          data.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
-          setIsOffline(fromCache);
-          setAllData(data);
+      try {
+        unsubscribeData = onSnapshot(
+          collection(db, 'hotlines'),
+          { includeMetadataChanges: true },
+          async (snapshot) => {
+            if (!active) return;
 
-          if (!fromCache) {
-            savedDataRef.current = data;
-            await saveCache(data);
-          }
-        },
-        (e) => {
-          console.warn('Firebase services error:', e?.message);
-          if (active) {
+            const fromCache = snapshot.metadata.fromCache;
+            const remoteData = snapshot.docs.map(normalize);
+            let data;
+
+            if (fromCache) {
+              const merged = new Map(savedDataRef.current.map((item) => [item.id, item]));
+              remoteData.forEach((item) => {
+                merged.set(item.id, { ...merged.get(item.id), ...item });
+              });
+              data = [...merged.values()];
+            } else {
+              serverResponseReceived = true;
+              settled = true;
+              clearRequestTimeout();
+              data = remoteData;
+            }
+
+            data.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+            if (fromCache) {
+              setIsOffline(true);
+            } else {
+              setIsOffline(false);
+              setLoadError(false);
+            }
+
+            setAllData(data);
+
+            if (!fromCache) {
+              savedDataRef.current = data;
+              await saveCache(data);
+            } else if (data.length > 0 && savedDataRef.current.length === 0) {
+              savedDataRef.current = data;
+            }
+
+            setLoading(false);
+
+            if (fromCache && settled && !serverResponseReceived && savedDataRef.current.length === 0) {
+              setLoadError(true);
+            }
+          },
+          (e) => {
+            console.warn('Firebase services error:', e?.message);
+            if (!active) return;
+
+            settled = true;
+            clearRequestTimeout();
             setIsOffline(true);
             setLoading(false);
+
+            if (savedDataRef.current.length === 0) {
+              setLoadError(true);
+            }
           }
+        );
+      } catch (e) {
+        console.warn('Unable to start services listener:', e?.message);
+        if (!active) return;
+
+        settled = true;
+        clearRequestTimeout();
+        setIsOffline(true);
+        setLoading(false);
+
+        if (savedDataRef.current.length === 0) {
+          setLoadError(true);
         }
-      );
+      }
     };
 
     const unsubscribeNet = NetInfo.addEventListener((state) => {
-      if (state.isConnected && state.isInternetReachable !== false) syncFeedback();
+      if (state.isConnected && state.isInternetReachable !== false) {
+        syncFeedback();
+      }
     });
 
     start();
 
     return () => {
       active = false;
+      clearRequestTimeout();
       unsubscribeNet();
       unsubscribeData?.();
     };
-  }, []);
+  }, [retryKey]);
 
   const categoryOf = (item) => String(item.category || '').trim().toLowerCase();
 
@@ -165,7 +236,7 @@ export default function ServicesScreen() {
     { title: 'Services', items: allData.filter((x) => categoryOf(x) === 'services') },
     { title: 'Other Pages', items: allData.filter((x) => categoryOf(x) === 'other pages') },
     { title: 'Pages', items: allData.filter((x) => ['page', 'pages'].includes(categoryOf(x))) },
-    { title: 'CCTV Stream', items: allData.filter((x) => categoryOf(x).includes('cctv')) },
+    { title: 'CCTV Stream', items: allData.filter((x) => categoryOf(x).includes('cctv')) }
   ];
 
   const badWords = ['putangina', 'puta', 'gago', 'tanga', 'bobo', 'ulol', 'leche', 'pakyu', 'siraulo', 'bwisit', 'bugok', 'yawa', 'nigger', 'put4ngina', 't4ngina', 'b0b0', '8080'];
@@ -226,6 +297,11 @@ export default function ServicesScreen() {
     }
   };
 
+  const retryLoading = () => {
+    setLoadError(false);
+    setRetryKey((previous) => previous + 1);
+  };
+
   const renderGrid = (items, columns = 3) => {
     const rows = [];
     for (let i = 0; i < items.length; i += columns) {
@@ -251,8 +327,25 @@ export default function ServicesScreen() {
     ));
   };
 
-  if (loading) {
-    return <View style={styles.loading}><ActivityIndicator size="large" color="#0047AB" /><Text style={styles.loadingText}>Loading Services...</Text></View>;
+  if (loading && allData.length === 0) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color="#0047AB" />
+        <Text style={styles.loadingText}>Loading Services...</Text>
+      </View>
+    );
+  }
+
+  if (loadError && allData.length === 0) {
+    return (
+      <View style={styles.loading}>
+        <Text style={styles.errorTitle}>Unable to Load Services</Text>
+        <Text style={styles.errorMessage}>The request timed out or failed. Please try again.</Text>
+        <TouchableOpacity onPress={retryLoading} style={styles.retryButton}>
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
   }
 
   return (
@@ -269,8 +362,6 @@ export default function ServicesScreen() {
           {renderGrid(section.items)}
         </View>
       ))}
-
-      {!allData.length && <Text style={styles.empty}>No saved services yet. Connect to the internet to load services.</Text>}
 
       <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.feedbackBtn}>
         <Text style={styles.feedbackBtnText}>Give Feedback</Text>
@@ -310,8 +401,12 @@ export default function ServicesScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, paddingHorizontal: 20, backgroundColor: '#fff' },
   content: { paddingTop: 5, paddingBottom: 100 },
-  loading: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  loadingText: { marginTop: 10 },
+  loading: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24, backgroundColor: '#fff' },
+  loadingText: { marginTop: 10, color: '#555' },
+  errorTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', color: '#333' },
+  errorMessage: { marginTop: 10, textAlign: 'center', color: '#555', lineHeight: 20 },
+  retryButton: { marginTop: 18, backgroundColor: '#0047AB', paddingVertical: 12, paddingHorizontal: 28, borderRadius: 8 },
+  retryText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   offline: { backgroundColor: '#6c757d', padding: 5, borderRadius: 5, marginTop: 10 },
   offlineText: { color: '#fff', textAlign: 'center', fontSize: 10, fontWeight: 'bold' },
   banner: { width: '100%', height: 180, overflow: 'hidden', borderRadius: 10, marginBottom: 5 },
@@ -323,7 +418,6 @@ const styles = StyleSheet.create({
   cctvImage: { width: 150, height: 150, borderRadius: 15 },
   itemName: { fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
   cctvName: { fontSize: 14, width: 150 },
-  empty: { textAlign: 'center', marginTop: 20, color: '#555' },
   feedbackBtn: { backgroundColor: '#0d6efd', paddingVertical: 12, borderRadius: 8, marginTop: 80, marginBottom: 20, alignItems: 'center' },
   feedbackBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
@@ -341,5 +435,5 @@ const styles = StyleSheet.create({
   warning: { backgroundColor: '#fff', borderRadius: 15, width: '90%', padding: 20, alignItems: 'center' },
   warningTitle: { fontSize: 18, fontWeight: 'bold', color: 'red', marginBottom: 10, textAlign: 'center' },
   warningMessage: { fontSize: 14, textAlign: 'center', marginBottom: 15 },
-  dismiss: { backgroundColor: '#dc3545' },
+  dismiss: { backgroundColor: '#dc3545' }
 });
