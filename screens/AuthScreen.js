@@ -19,7 +19,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 const PHILSMS_API_TOKEN = '5121|FvPGbsJkGvOfGE2EZNR129SVZladGtFw8exInRcmc555b7e3';
 const PHILSMS_SENDER_ID = 'PhilSMS';
 
-const EMAILJS_SERVICE_ID = 'service_m6h4fcd';
+const EMAILJS_SERVICE_ID = 'service_nribbxo';
 const EMAILJS_TEMPLATE_ID = 'template_h170b3d';
 const EMAILJS_PUBLIC_KEY = 'CiFGvQir_uGzyUpLM';
 
