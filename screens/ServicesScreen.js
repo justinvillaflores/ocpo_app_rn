@@ -5,9 +5,8 @@ import NetInfo from '@react-native-community/netinfo';
 import { db } from '../firebaseConfig';
 import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 
-const CACHE_KEY = '@services_hotlines_cache';
+const SERVICES_CACHE_KEY = '@services_hotlines_cache';
 const QUEUE_KEY = '@offline_feedback_queue';
-const REQUEST_TIMEOUT = 15000;
 const DEFAULT_LOGO = require('../assets/pnp.png');
 
 const normalize = (doc) => {
@@ -26,7 +25,13 @@ const normalize = (doc) => {
 const SmartImage = ({ uri, style }) => {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [uri]);
-  return <Image source={uri && !failed ? { uri } : DEFAULT_LOGO} style={style} onError={() => setFailed(true)} />;
+  return (
+    <Image
+      source={uri && !failed ? { uri } : DEFAULT_LOGO}
+      style={style}
+      onError={() => setFailed(true)}
+    />
+  );
 };
 
 export default function ServicesScreen() {
@@ -37,23 +42,7 @@ export default function ServicesScreen() {
   const [allData, setAllData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
-  const [loadError, setLoadError] = useState(false);
-  const [retryKey, setRetryKey] = useState(0);
-  const savedRef = useRef(null);
-  const savedDataRef = useRef([]);
   const syncingRef = useRef(false);
-
-  const saveCache = async (data) => {
-    try {
-      const json = JSON.stringify(data);
-      if (json !== savedRef.current) {
-        await AsyncStorage.setItem(CACHE_KEY, json);
-        savedRef.current = json;
-      }
-    } catch (e) {
-      console.warn('Services cache save failed:', e?.message);
-    }
-  };
 
   const syncFeedback = async () => {
     if (syncingRef.current) return;
@@ -87,131 +76,64 @@ export default function ServicesScreen() {
   };
 
   useEffect(() => {
-    let active = true;
-    let unsubscribeData;
-    let timeout;
-    let serverResponseReceived = false;
-    let settled = false;
+    let isMounted = true;
 
-    const clearRequestTimeout = () => {
-      if (timeout) {
-        clearTimeout(timeout);
-        timeout = null;
+    const loadCachedServices = async () => {
+      try {
+        const cachedData = await AsyncStorage.getItem(SERVICES_CACHE_KEY);
+        if (cachedData !== null && isMounted) {
+          const parsedData = JSON.parse(cachedData);
+          if (Array.isArray(parsedData) && parsedData.length > 0) {
+            setAllData(parsedData);
+            setLoading(false);
+            console.log('Successfully loaded cached services:', parsedData.length);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading cached services:', error);
       }
     };
 
-    const start = async () => {
-      setLoading(true);
-      setLoadError(false);
-      setIsOffline(false);
+    loadCachedServices();
 
-      try {
-        const cached = await AsyncStorage.getItem(CACHE_KEY);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          if (Array.isArray(parsed)) {
-            savedRef.current = cached;
-            savedDataRef.current = parsed;
-            if (active && parsed.length > 0) {
-              setAllData(parsed);
-              setLoading(false);
+    const colRef = collection(db, 'hotlines');
+
+    const unsubscribeData = onSnapshot(
+      colRef,
+      { includeMetadataChanges: true },
+      async (snapshot) => {
+        if (!isMounted) return;
+
+        const fromCache = snapshot.metadata.fromCache;
+        setIsOffline(fromCache);
+
+        const list = snapshot.docs
+          .map(normalize)
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+        if (list.length > 0) {
+          setAllData(list);
+
+          if (!fromCache) {
+            try {
+              await AsyncStorage.setItem(SERVICES_CACHE_KEY, JSON.stringify(list));
+              console.log('Updated services local cache with latest server data.');
+            } catch (error) {
+              console.error('Error saving services to local cache:', error);
             }
           }
         }
-      } catch (e) {
-        console.warn('Services cache read failed:', e?.message);
-      }
 
-      if (!active) return;
-
-      timeout = setTimeout(() => {
-        if (!active || serverResponseReceived || settled) return;
-
-        settled = true;
-        setIsOffline(true);
         setLoading(false);
-
-        if (savedDataRef.current.length === 0) {
-          setLoadError(true);
-        }
-      }, REQUEST_TIMEOUT);
-
-      try {
-        unsubscribeData = onSnapshot(
-          collection(db, 'hotlines'),
-          { includeMetadataChanges: true },
-          async (snapshot) => {
-            if (!active) return;
-
-            const fromCache = snapshot.metadata.fromCache;
-            const remoteData = snapshot.docs.map(normalize);
-            let data;
-
-            if (fromCache) {
-              const merged = new Map(savedDataRef.current.map((item) => [item.id, item]));
-              remoteData.forEach((item) => {
-                merged.set(item.id, { ...merged.get(item.id), ...item });
-              });
-              data = [...merged.values()];
-            } else {
-              serverResponseReceived = true;
-              settled = true;
-              clearRequestTimeout();
-              data = remoteData;
-            }
-
-            data.sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
-
-            if (fromCache) {
-              setIsOffline(true);
-            } else {
-              setIsOffline(false);
-              setLoadError(false);
-            }
-
-            setAllData(data);
-
-            if (!fromCache) {
-              savedDataRef.current = data;
-              await saveCache(data);
-            } else if (data.length > 0 && savedDataRef.current.length === 0) {
-              savedDataRef.current = data;
-            }
-
-            setLoading(false);
-
-            if (fromCache && settled && !serverResponseReceived && savedDataRef.current.length === 0) {
-              setLoadError(true);
-            }
-          },
-          (e) => {
-            console.warn('Firebase services error:', e?.message);
-            if (!active) return;
-
-            settled = true;
-            clearRequestTimeout();
-            setIsOffline(true);
-            setLoading(false);
-
-            if (savedDataRef.current.length === 0) {
-              setLoadError(true);
-            }
-          }
-        );
-      } catch (e) {
-        console.warn('Unable to start services listener:', e?.message);
-        if (!active) return;
-
-        settled = true;
-        clearRequestTimeout();
-        setIsOffline(true);
-        setLoading(false);
-
-        if (savedDataRef.current.length === 0) {
-          setLoadError(true);
+      },
+      (error) => {
+        console.error('Firebase services error:', error);
+        if (isMounted) {
+          setIsOffline(true);
+          setLoading(false);
         }
       }
-    };
+    );
 
     const unsubscribeNet = NetInfo.addEventListener((state) => {
       if (state.isConnected && state.isInternetReachable !== false) {
@@ -219,15 +141,12 @@ export default function ServicesScreen() {
       }
     });
 
-    start();
-
     return () => {
-      active = false;
-      clearRequestTimeout();
+      isMounted = false;
+      unsubscribeData();
       unsubscribeNet();
-      unsubscribeData?.();
     };
-  }, [retryKey]);
+  }, []);
 
   const categoryOf = (item) => String(item.category || '').trim().toLowerCase();
 
@@ -297,11 +216,6 @@ export default function ServicesScreen() {
     }
   };
 
-  const retryLoading = () => {
-    setLoadError(false);
-    setRetryKey((previous) => previous + 1);
-  };
-
   const renderGrid = (items, columns = 3) => {
     const rows = [];
     for (let i = 0; i < items.length; i += columns) {
@@ -317,7 +231,12 @@ export default function ServicesScreen() {
           const cctv = categoryOf(item).includes('cctv');
 
           return (
-            <TouchableOpacity key={item.id || `${r}-${i}`} onPress={() => openItem(item)} style={styles.gridItem}>
+            <TouchableOpacity
+              key={item.id || `${r}-${i}`}
+              activeOpacity={0.7}
+              onPress={() => openItem(item)}
+              style={styles.gridItem}
+            >
               <SmartImage uri={item.imageUrl} style={[styles.image, cctv && styles.cctvImage]} />
               <Text style={[styles.itemName, cctv && styles.cctvName]}>{item.name || 'Service'}</Text>
             </TouchableOpacity>
@@ -327,7 +246,7 @@ export default function ServicesScreen() {
     ));
   };
 
-  if (loading && allData.length === 0) {
+  if (loading) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color="#0047AB" />
@@ -336,21 +255,13 @@ export default function ServicesScreen() {
     );
   }
 
-  if (loadError && allData.length === 0) {
-    return (
-      <View style={styles.loading}>
-        <Text style={styles.errorTitle}>Unable to Load Services</Text>
-        <Text style={styles.errorMessage}>The request timed out or failed. Please try again.</Text>
-        <TouchableOpacity onPress={retryLoading} style={styles.retryButton}>
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {isOffline && <View style={styles.offline}><Text style={styles.offlineText}>OFFLINE MODE - SAVED DATA</Text></View>}
+      {isOffline && (
+        <View style={styles.offline}>
+          <Text style={styles.offlineText}>OFFLINE MODE - CACHED SERVICES</Text>
+        </View>
+      )}
 
       <View style={styles.banner}>
         <Image source={require('../assets/ocposervices.png')} style={styles.bannerImage} />
@@ -363,7 +274,7 @@ export default function ServicesScreen() {
         </View>
       ))}
 
-      <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.feedbackBtn}>
+      <TouchableOpacity activeOpacity={0.7} onPress={() => setModalVisible(true)} style={styles.feedbackBtn}>
         <Text style={styles.feedbackBtnText}>Give Feedback</Text>
       </TouchableOpacity>
 
@@ -403,10 +314,6 @@ const styles = StyleSheet.create({
   content: { paddingTop: 5, paddingBottom: 100 },
   loading: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24, backgroundColor: '#fff' },
   loadingText: { marginTop: 10, color: '#555' },
-  errorTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', color: '#333' },
-  errorMessage: { marginTop: 10, textAlign: 'center', color: '#555', lineHeight: 20 },
-  retryButton: { marginTop: 18, backgroundColor: '#0047AB', paddingVertical: 12, paddingHorizontal: 28, borderRadius: 8 },
-  retryText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   offline: { backgroundColor: '#6c757d', padding: 5, borderRadius: 5, marginTop: 10 },
   offlineText: { color: '#fff', textAlign: 'center', fontSize: 10, fontWeight: 'bold' },
   banner: { width: '100%', height: 180, overflow: 'hidden', borderRadius: 10, marginBottom: 5 },
