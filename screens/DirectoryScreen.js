@@ -20,7 +20,8 @@ const styles = {
   message: { marginTop: 10, textAlign: 'center', color: '#555', fontSize: 14, lineHeight: 20 },
   retryButton: { marginTop: 18, backgroundColor: '#0047AB', paddingVertical: 12, paddingHorizontal: 28, borderRadius: 8 },
   retryText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  mainTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'center', marginBottom: 10 },
+  mainTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', textAlign: 'center', marginBottom: 4 },
+  subInstruction: { fontSize: 13, color: '#666', textAlign: 'center', marginBottom: 14 },
   emergencyImage: { width: 200, height: 200, marginTop: -10, resizeMode: 'contain' },
   emergencyNumber: { fontSize: 25, fontWeight: 'bold', textAlign: 'center', marginTop: -5 },
   ocpoImage: { width: 160, height: 160, resizeMode: 'contain' },
@@ -279,6 +280,7 @@ export default function DirectoryScreen() {
         Welcome to{' '}
         <Text style={{ color: '#000' }}>Olongapo City Emergency Hotlines</Text>
       </Text>
+      <Text style={styles.subInstruction}>Tap any logo to place an emergency call.</Text>
 
       <TouchableOpacity onPress={() => callNumber('911')} style={styles.emergencyButton}>
         <Image source={require('../assets/paynal_911.png')} style={styles.emergencyImage} />
