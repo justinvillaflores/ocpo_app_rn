@@ -44,7 +44,6 @@ function cleanAddress(value) {
 
   const text = value.trim().replace(/\s+/g, ' ');
 
-  // Huwag ituring na address ang plus code.
   if (/^[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,}$/i.test(text)) {
     return '';
   }

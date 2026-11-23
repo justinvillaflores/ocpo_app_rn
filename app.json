@@ -4,10 +4,10 @@
     "slug": "ocpo-hotlines",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/1010.png",
+    "icon": "./assets/download1.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/1010.png",
+      "image": "./assets/download1.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },

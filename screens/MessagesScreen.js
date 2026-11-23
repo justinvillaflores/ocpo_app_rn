@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Image,
@@ -7,7 +6,7 @@ import {
 } from 'react-native';
 import {
   Search, Shield, Send, Camera, ChevronLeft,
-  Building2, WifiOff, MessageSquare
+  Building2, WifiOff, MessageSquare, Check
 } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as SMS from 'expo-sms';
@@ -43,7 +42,7 @@ export default function MessagesScreen() {
   const [selectedContact, setSelectedContact] = useState(null);
   const [pendingResponder, setPendingResponder] = useState(null);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
-  const [selectedIncidentType, setSelectedIncidentType] = useState(null);
+  const [selectedIncidentTypes, setSelectedIncidentTypes] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [messageText, setMessageText] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -171,6 +170,24 @@ export default function MessagesScreen() {
     return () => unsubscribe();
   }, [inChat, selectedContact, user]);
 
+  const toggleIncidentSelection = item => {
+    setSelectedIncidentTypes(prev => {
+      const exists = prev.some(selected => selected.id === item.id);
+      if (exists) {
+        return prev.filter(selected => selected.id !== item.id);
+      }
+      return [...prev, item];
+    });
+  };
+
+  const getIncidentLabelsText = () => {
+    return selectedIncidentTypes.map(item => item.label).join(', ');
+  };
+
+  const getIncidentIdsArray = () => {
+    return selectedIncidentTypes.map(item => item.id);
+  };
+
   const handleSelectResponder = item => {
     if (!user) {
       Alert.alert('Login Required', 'Please log in before starting a chat.');
@@ -183,18 +200,19 @@ export default function MessagesScreen() {
     }
 
     setPendingResponder(item);
-    setSelectedIncidentType(null);
+    setSelectedIncidentTypes([]);
     setShowIncidentModal(true);
   };
 
   const handleContinueToChat = async () => {
-    if (!user || !pendingResponder || !selectedIncidentType) {
-      Alert.alert('Required', 'Please select an incident type first.');
+    if (!user || !pendingResponder || selectedIncidentTypes.length === 0) {
+      Alert.alert('Required', 'Please select at least one incident type first.');
       return;
     }
 
     const responder = pendingResponder;
-    const incident = selectedIncidentType;
+    const incidentLabels = getIncidentLabelsText();
+    const incidentIds = getIncidentIdsArray();
     const chatId = [user.uid, responder.id].sort().join('_');
 
     try {
@@ -202,8 +220,9 @@ export default function MessagesScreen() {
         participants: [user.uid, responder.id],
         citizenName: currentUserName,
         responderName: responder.name || responder.username || 'Responder',
-        incidentType: incident.label,
-        incidentTypeId: incident.id,
+        incidentType: incidentLabels,
+        incidentTypes: selectedIncidentTypes.map(item => item.label),
+        incidentTypeIds: incidentIds,
         updatedAt: serverTimestamp()
       }, { merge: true });
 
@@ -221,7 +240,7 @@ export default function MessagesScreen() {
   const handleCancelIncidentSelection = () => {
     setShowIncidentModal(false);
     setPendingResponder(null);
-    setSelectedIncidentType(null);
+    setSelectedIncidentTypes([]);
   };
 
   const handleSendSMS = async textToSend => {
@@ -238,8 +257,12 @@ export default function MessagesScreen() {
         return;
       }
 
+      const incidentLabels = selectedIncidentTypes.length > 0
+        ? getIncidentLabelsText()
+        : 'Not specified';
+
       const body =
-        `[OneCall EMERGENCY]\nIncident: ${selectedIncidentType?.label || 'Not specified'}\n` +
+        `[OneCall EMERGENCY]\nIncident: ${incidentLabels}\n` +
         `From: ${currentUserName}\nMessage: ${textToSend}`;
 
       await SMS.sendSMSAsync([phone], body);
@@ -251,8 +274,8 @@ export default function MessagesScreen() {
 
   // Send text message
   const handleAction = async () => {
-    if (!selectedIncidentType) {
-      Alert.alert('Required', 'Select an incident type first.');
+    if (selectedIncidentTypes.length === 0) {
+      Alert.alert('Required', 'Select at least one incident type first.');
       return;
     }
 
@@ -272,6 +295,8 @@ export default function MessagesScreen() {
 
     const chatId = [user.uid, selectedContact.id].sort().join('_');
     const textToSend = messageText.trim();
+    const incidentLabels = getIncidentLabelsText();
+    const incidentIds = getIncidentIdsArray();
 
     try {
       await setDoc(doc(db, 'chats', chatId), {
@@ -280,16 +305,18 @@ export default function MessagesScreen() {
         participants: [user.uid, selectedContact.id],
         citizenName: currentUserName,
         responderName: selectedContact.name || selectedContact.username || 'Responder',
-        incidentType: selectedIncidentType.label,
-        incidentTypeId: selectedIncidentType.id
+        incidentType: incidentLabels,
+        incidentTypes: selectedIncidentTypes.map(item => item.label),
+        incidentTypeIds: incidentIds
       }, { merge: true });
 
       await addDoc(collection(db, 'chats', chatId, 'messages'), {
         text: textToSend,
         senderId: user.uid,
         receiverId: selectedContact.id,
-        incidentType: selectedIncidentType.label,
-        incidentTypeId: selectedIncidentType.id,
+        incidentType: incidentLabels,
+        incidentTypes: selectedIncidentTypes.map(item => item.label),
+        incidentTypeIds: incidentIds,
         createdAt: serverTimestamp()
       });
 
@@ -302,8 +329,8 @@ export default function MessagesScreen() {
 
   // Open camera
   const handleOpenCamera = async () => {
-    if (!selectedIncidentType) {
-      Alert.alert('Required', 'Select an incident type before sending a photo.');
+    if (selectedIncidentTypes.length === 0) {
+      Alert.alert('Required', 'Select at least one incident type before sending a photo.');
       return;
     }
 
@@ -336,7 +363,7 @@ export default function MessagesScreen() {
 
   // Send photo with incident information
   const uploadImageBase64 = async uri => {
-    if (!selectedContact || !user || !selectedIncidentType) {
+    if (!selectedContact || !user || selectedIncidentTypes.length === 0) {
       Alert.alert('Error', 'No active chat or incident type selected.');
       return;
     }
@@ -350,6 +377,8 @@ export default function MessagesScreen() {
 
       const chatId = [user.uid, selectedContact.id].sort().join('_');
       const image = `data:image/jpeg;base64,${base64}`;
+      const incidentLabels = getIncidentLabelsText();
+      const incidentIds = getIncidentIdsArray();
 
       await setDoc(doc(db, 'chats', chatId), {
         lastMessage: '📷 Sent a photo proof',
@@ -357,8 +386,9 @@ export default function MessagesScreen() {
         participants: [user.uid, selectedContact.id],
         citizenName: currentUserName,
         responderName: selectedContact.name || selectedContact.username || 'Responder',
-        incidentType: selectedIncidentType.label,
-        incidentTypeId: selectedIncidentType.id
+        incidentType: incidentLabels,
+        incidentTypes: selectedIncidentTypes.map(item => item.label),
+        incidentTypeIds: incidentIds
       }, { merge: true });
 
       await addDoc(collection(db, 'chats', chatId, 'messages'), {
@@ -366,8 +396,9 @@ export default function MessagesScreen() {
         text: '',
         senderId: user.uid,
         receiverId: selectedContact.id,
-        incidentType: selectedIncidentType.label,
-        incidentTypeId: selectedIncidentType.id,
+        incidentType: incidentLabels,
+        incidentTypes: selectedIncidentTypes.map(item => item.label),
+        incidentTypeIds: incidentIds,
         createdAt: serverTimestamp()
       });
     } catch (error) {
@@ -418,7 +449,7 @@ export default function MessagesScreen() {
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>What type of incident?</Text>
               <Text style={styles.modalSubtitle}>
-                Select an incident type before sending messages or photos.
+                Select one or more incident types before sending messages or photos.
               </Text>
 
               <FlatList
@@ -427,17 +458,17 @@ export default function MessagesScreen() {
                 style={styles.incidentList}
                 keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => {
-                  const selected = selectedIncidentType?.id === item.id;
+                  const selected = selectedIncidentTypes.some(s => s.id === item.id);
 
                   return (
                     <TouchableOpacity
-                      onPress={() => setSelectedIncidentType(item)}
+                      onPress={() => toggleIncidentSelection(item)}
                       style={[styles.incidentOption, selected && styles.incidentSelected]}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected }}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: selected }}
                     >
-                      <View style={styles.radioOuter}>
-                        {selected && <View style={styles.radioInner} />}
+                      <View style={[styles.checkboxOuter, selected && styles.checkboxChecked]}>
+                        {selected && <Check size={14} color="#FFFFFF" strokeWidth={3} />}
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.incidentName, selected && styles.incidentNameSelected]}>
@@ -455,11 +486,13 @@ export default function MessagesScreen() {
                   <Text style={styles.cancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.continueBtn, !selectedIncidentType && styles.disabledBtn]}
+                  style={[styles.continueBtn, selectedIncidentTypes.length === 0 && styles.disabledBtn]}
                   onPress={handleContinueToChat}
-                  disabled={!selectedIncidentType}
+                  disabled={selectedIncidentTypes.length === 0}
                 >
-                  <Text style={styles.continueText}>Continue to chat</Text>
+                  <Text style={styles.continueText}>
+                    Continue to chat{selectedIncidentTypes.length > 0 ? ` (${selectedIncidentTypes.length})` : ''}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -549,7 +582,7 @@ export default function MessagesScreen() {
                 {isConnected ? '● Online' : 'Offline'}
               </Text>
               <Text style={styles.chatIncidentType}>
-                Incident: {selectedIncidentType?.label || 'Not selected'}
+                Incident: {selectedIncidentTypes.length > 0 ? getIncidentLabelsText() : 'Not selected'}
               </Text>
             </View>
           </View>
@@ -654,8 +687,8 @@ const styles = StyleSheet.create({
   incidentList: { flexGrow: 0, flexShrink: 1 },
   incidentOption: { flexDirection: 'row', alignItems: 'center', padding: 11, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 11, marginBottom: 8 },
   incidentSelected: { borderColor: '#3B82F6', backgroundColor: '#EFF6FF' },
-  radioOuter: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#94A3B8', alignItems: 'center', justifyContent: 'center', marginRight: 10 },
-  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#3B82F6' },
+  checkboxOuter: { width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: '#94A3B8', alignItems: 'center', justifyContent: 'center', marginRight: 10, backgroundColor: '#FFFFFF' },
+  checkboxChecked: { borderColor: '#3B82F6', backgroundColor: '#3B82F6' },
   incidentName: { fontSize: 14, fontWeight: '700', color: '#334155' },
   incidentNameSelected: { color: '#1D4ED8' },
   incidentDescription: { fontSize: 11, lineHeight: 15, color: '#64748B', marginTop: 2 },

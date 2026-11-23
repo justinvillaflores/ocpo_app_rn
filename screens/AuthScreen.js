@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
@@ -19,6 +18,10 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 const PHILSMS_API_TOKEN = '5121|FvPGbsJkGvOfGE2EZNR129SVZladGtFw8exInRcmc555b7e3';
 const PHILSMS_SENDER_ID = 'PhilSMS';
+
+const EMAILJS_SERVICE_ID = 'service_m6h4fcd';
+const EMAILJS_TEMPLATE_ID = 'template_h170b3d';
+const EMAILJS_PUBLIC_KEY = 'i4-ipzIrmNzC9_sRf';
 
 const OLONGAPO_BARANGAYS = [
   'Barretto', 'East Bajac-bajac', 'East Tapinac', 'Gordon Heights',
@@ -75,6 +78,7 @@ export default function AuthScreen({ navigation }) {
   const [resendTimer, setResendTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [isSendingOTP, setIsSendingOTP] = useState(false);
+  const [otpChannel, setOtpChannel] = useState('sms');
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
@@ -146,6 +150,10 @@ export default function AuthScreen({ navigation }) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
   };
 
+  const normalizeText = text => {
+    return text.trim().replace(/\s+/g, ' ').toLowerCase();
+  };
+
   const checkPhoneNumberExists = async formattedPhone => {
     try {
       const usersRef = collection(db, 'users');
@@ -153,8 +161,38 @@ export default function AuthScreen({ navigation }) {
       const querySnapshot = await getDocs(q);
       return !querySnapshot.empty;
     } catch (error) {
-      console.log('Firestore check warning:', error.message);
+      console.log('Firestore phone check warning:', error.message);
       throw new Error('Unable to verify the contact number right now. Please try again.');
+    }
+  };
+
+  const checkNameExists = async (fName, lName) => {
+    try {
+      const usersRef = collection(db, 'users');
+      const normalizedPair = `${normalizeText(fName)} ${normalizeText(lName)}`;
+
+      const qNormalized = query(usersRef, where('normalizedFirstLast', '==', normalizedPair));
+      const normalizedSnapshot = await getDocs(qNormalized);
+      if (!normalizedSnapshot.empty) {
+        return true;
+      }
+
+      const allUsersSnapshot = await getDocs(usersRef);
+      let duplicateFound = false;
+
+      allUsersSnapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const existingFirst = normalizeText(data.firstName || '');
+        const existingLast = normalizeText(data.lastName || '');
+        if (existingFirst && existingLast && `${existingFirst} ${existingLast}` === normalizedPair) {
+          duplicateFound = true;
+        }
+      });
+
+      return duplicateFound;
+    } catch (error) {
+      console.log('Firestore name check warning:', error.message);
+      throw new Error('Unable to verify user name availability right now. Please try again.');
     }
   };
 
@@ -214,6 +252,17 @@ export default function AuthScreen({ navigation }) {
       setIsRegistering(true);
 
       try {
+        const nameExists = await checkNameExists(firstName, lastName);
+
+        if (nameExists) {
+          setLoading(false);
+          setIsRegistering(false);
+          return Alert.alert(
+            'Name Already Registered',
+            'An account with this First Name and Last Name is already registered. Duplicate user entries are not allowed.'
+          );
+        }
+
         const phoneExists = await checkPhoneNumberExists(e164Phone);
 
         if (phoneExists) {
@@ -231,6 +280,56 @@ export default function AuthScreen({ navigation }) {
         setLoading(false);
         Alert.alert('Registration Error', error.message);
       }
+    }
+  };
+
+  const requestEmailOTPCode = async (targetEmail, existingOtp = null) => {
+    setIsSendingOTP(true);
+
+    try {
+      const otpToSend = existingOtp || Math.floor(100000 + Math.random() * 900000).toString();
+      setGeneratedOTP(otpToSend);
+
+      const response = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json'
+        },
+        body: JSON.stringify({
+          service_id: EMAILJS_SERVICE_ID,
+          template_id: EMAILJS_TEMPLATE_ID,
+          user_id: EMAILJS_PUBLIC_KEY,
+          template_params: {
+            email: targetEmail,
+            to_email: targetEmail,
+            to_name: `${firstName.trim()} ${lastName.trim()}`,
+            otp_code: otpToSend,
+            app_name: 'OneCall'
+          }
+        })
+      });
+
+      if (response.ok) {
+        setOtpChannel('email');
+        setShowOTPModal(true);
+        setResendTimer(60);
+        setCanResend(false);
+        setVerificationCode('');
+        Alert.alert('Email OTP Sent', `We sent a 6-digit verification code to ${targetEmail}`);
+      } else {
+        const errText = await response.text();
+        throw new Error(errText || 'Failed to send verification code via Email.');
+      }
+    } catch (error) {
+      Alert.alert(
+        'Email OTP Error',
+        error.message || 'Failed to send Email OTP. Please check your internet connection.'
+      );
+      setIsRegistering(false);
+    } finally {
+      setIsSendingOTP(false);
+      setLoading(false);
     }
   };
 
@@ -262,6 +361,7 @@ export default function AuthScreen({ navigation }) {
         response.ok &&
         (resData.status === 'success' || resData.code === '200' || resData.code === 200)
       ) {
+        setOtpChannel('sms');
         setShowOTPModal(true);
         setResendTimer(60);
         setCanResend(false);
@@ -277,10 +377,10 @@ export default function AuthScreen({ navigation }) {
     } catch (error) {
       console.error('PhilSMS OTP Error:', error);
       Alert.alert(
-        'OTP Delivery Error',
-        error.message || 'Failed to send SMS code. Please check your network connection.'
+        'SMS Delivery Failed',
+        'Unable to send OTP via SMS right now. Sending verification code to your email instead...'
       );
-      setIsRegistering(false);
+      await requestEmailOTPCode(email.trim());
     } finally {
       setIsSendingOTP(false);
       setLoading(false);
@@ -295,13 +395,17 @@ export default function AuthScreen({ navigation }) {
     if (verificationCode.trim() !== generatedOTP) {
       return Alert.alert(
         'Verification Failed',
-        'Incorrect OTP code. Please check the SMS and try again.'
+        `Incorrect OTP code. Please check your ${otpChannel === 'sms' ? 'SMS' : 'Email'} and try again.`
       );
     }
 
     setIsVerifyingOTP(true);
 
     try {
+      const cleanFirstName = firstName.trim().replace(/\s+/g, ' ');
+      const cleanMiddleName = middleName.trim().replace(/\s+/g, ' ');
+      const cleanLastName = lastName.trim().replace(/\s+/g, ' ');
+
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         email.trim(),
@@ -310,22 +414,26 @@ export default function AuthScreen({ navigation }) {
 
       const user = userCredential.user;
       const e164Phone = formatPhoneNumberE164(contact);
-      const fullName = [firstName.trim(), middleName.trim(), lastName.trim()]
+      const fullName = [cleanFirstName, cleanMiddleName, cleanLastName]
         .filter(Boolean)
         .join(' ');
+      const normalizedFirstLast = `${cleanFirstName.toLowerCase()} ${cleanLastName.toLowerCase()}`;
       const fullAddress = `${street.trim()}, Brgy. ${barangay}, Olongapo City`;
 
       await setDoc(doc(db, 'users', user.uid), {
-        firstName: firstName.trim(),
-        middleName: middleName.trim(),
-        lastName: lastName.trim(),
+        firstName: cleanFirstName,
+        middleName: cleanMiddleName,
+        lastName: cleanLastName,
         fullName,
+        normalizedFirstLast,
         username: fullName,
         address: fullAddress,
         barangay,
         street: street.trim(),
         phoneNumber: e164Phone,
-        isPhoneVerified: true,
+        isPhoneVerified: otpChannel === 'sms',
+        isEmailVerified: otpChannel === 'email',
+        verificationMethod: otpChannel,
         email: email.trim(),
         role: 'citizen',
         privacyConsent: true,
@@ -336,7 +444,10 @@ export default function AuthScreen({ navigation }) {
 
       setShowOTPModal(false);
       setIsRegistering(false);
-      Alert.alert('Success', 'Phone number verified and account created successfully!');
+      Alert.alert(
+        'Success',
+        `${otpChannel === 'sms' ? 'Phone number' : 'Email address'} verified and account created successfully!`
+      );
       safeNavigateToNextScreen();
     } catch (error) {
       console.error('Firebase Registration Error:', error);
@@ -348,7 +459,16 @@ export default function AuthScreen({ navigation }) {
 
   const handleResendOTP = async () => {
     if (!canResend || isSendingOTP) return;
-    await requestOTPCode(formatPhoneNumberE164(contact));
+    if (otpChannel === 'email') {
+      await requestEmailOTPCode(email.trim());
+    } else {
+      await requestOTPCode(formatPhoneNumberE164(contact));
+    }
+  };
+
+  const handleSendViaEmailFallback = async () => {
+    if (isSendingOTP) return;
+    await requestEmailOTPCode(email.trim());
   };
 
   const handleForgotPassword = async () => {
@@ -383,7 +503,7 @@ export default function AuthScreen({ navigation }) {
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Image source={require('../assets/1010.png')} style={styles.logoImage} />
+      <Image source={require('../assets/download1.png')} style={styles.logoImage} />
 
       <Animated.View style={{ width: '100%', alignItems: 'center', opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
         <Text style={styles.welcomeTitle}>{isLogin ? 'Welcome Back' : 'Create Account'}</Text>
@@ -554,14 +674,18 @@ export default function AuthScreen({ navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Enter OTP Code</Text>
+              <Text style={styles.modalTitle}>
+                {otpChannel === 'sms' ? 'Enter SMS OTP Code' : 'Enter Email OTP Code'}
+              </Text>
               <TouchableOpacity onPress={() => { setShowOTPModal(false); setIsRegistering(false); }}>
                 <Ionicons name="close" size={24} color="#333" />
               </TouchableOpacity>
             </View>
             <Text style={styles.otpDescription}>
               We sent a 6-digit verification code to{' '}
-              <Text style={{ fontWeight: 'bold' }}>{formatPhoneNumberE164(contact)}</Text>
+              <Text style={{ fontWeight: 'bold' }}>
+                {otpChannel === 'sms' ? formatPhoneNumberE164(contact) : email.trim()}
+              </Text>
             </Text>
             <View style={styles.otpInputContainer}>
               <TextInput
@@ -581,6 +705,17 @@ export default function AuthScreen({ navigation }) {
                 {canResend ? 'Resend Code' : `Resend code in ${resendTimer}s`}
               </Text>
             </TouchableOpacity>
+            {otpChannel === 'sms' && (
+              <TouchableOpacity
+                style={styles.emailFallbackContainer}
+                onPress={handleSendViaEmailFallback}
+                disabled={isSendingOTP}
+              >
+                <Text style={styles.emailFallbackText}>
+                  {isSendingOTP ? 'Sending to email...' : "Didn't receive SMS? Send OTP to Email instead"}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </Modal>
@@ -620,6 +755,8 @@ const styles = StyleSheet.create({
   otpInput: { fontSize: 24, letterSpacing: 8, textAlign: 'center', fontWeight: 'bold', color: '#003399' },
   resendContainer: { marginTop: 15, alignItems: 'center' },
   resendText: { fontSize: 14, fontWeight: '600' },
+  emailFallbackContainer: { marginTop: 14, alignItems: 'center', paddingVertical: 8 },
+  emailFallbackText: { fontSize: 13, color: '#0047AB', fontWeight: 'bold', textDecorationLine: 'underline' },
   privacyIntro: { fontSize: 13, lineHeight: 20, color: '#444', marginBottom: 15 },
   privacySection: { marginBottom: 15 },
   privacyHeading: { color: '#003399', fontSize: 14, fontWeight: 'bold', marginBottom: 5 },
