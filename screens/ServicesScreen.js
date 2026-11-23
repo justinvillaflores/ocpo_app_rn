@@ -5,14 +5,13 @@ import NetInfo from '@react-native-community/netinfo';
 import { db } from '../firebaseConfig';
 import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 
-const SERVICES_CACHE_KEY = '@services_hotlines_cache';
+const SERVICES_CACHE_KEY = '@services_hotlines_cache_v2';
 const QUEUE_KEY = '@offline_feedback_queue';
 const DEFAULT_LOGO = require('../assets/pnp.png');
 
 const normalize = (doc) => {
   const d = doc.data();
   return {
-    ...d,
     id: doc.id,
     name: d.name || d.title || d.serviceName || d.hotlineName || 'Service',
     category: String(d.category || d.type || '').trim().toLowerCase(),
@@ -20,6 +19,17 @@ const normalize = (doc) => {
     url: d.url || d.link || d.website || d.webUrl || '',
     imageUrl: d.imageUrl || d.logoUrl || d.image || d.logo || d.photoURL || null
   };
+};
+
+const prepareForCache = (list) => {
+  return list.map((item) => ({
+    id: item.id,
+    name: item.name,
+    category: item.category,
+    number: item.number,
+    url: item.url,
+    imageUrl: item.imageUrl && item.imageUrl.length < 2000 ? item.imageUrl : null
+  }));
 };
 
 const SmartImage = ({ uri, style }) => {
@@ -85,6 +95,8 @@ export default function ServicesScreen() {
           const parsedData = JSON.parse(cachedData);
           if (Array.isArray(parsedData) && parsedData.length > 0) {
             setAllData(parsedData);
+            setLoading(false);
+            console.log('Successfully loaded cached services:', parsedData.length);
           }
         }
       } catch (error) {
@@ -114,7 +126,9 @@ export default function ServicesScreen() {
         if (!fromCache) {
           setAllData(list);
           try {
-            await AsyncStorage.setItem(SERVICES_CACHE_KEY, JSON.stringify(list));
+            const safeCacheList = prepareForCache(list);
+            await AsyncStorage.setItem(SERVICES_CACHE_KEY, JSON.stringify(safeCacheList));
+            console.log('Saved services to local cache:', safeCacheList.length);
           } catch (error) {
             console.error('Error saving services to local cache:', error);
           }

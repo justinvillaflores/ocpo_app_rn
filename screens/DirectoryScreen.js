@@ -4,7 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { db } from '../firebaseConfig';
 import { collection, onSnapshot } from 'firebase/firestore';
 
-const HOTLINES_CACHE_KEY = '@directory_hotlines_cache';
+const HOTLINES_CACHE_KEY = '@directory_hotlines_cache_v2';
 const DEFAULT_LOGO = require('../assets/OCPO.png');
 
 const styles = {
@@ -32,13 +32,24 @@ const styles = {
 const normalize = (doc) => {
   const d = doc.data();
   return {
-    ...d,
     id: doc.id,
     name: d.name || d.title || d.hotlineName || 'Hotline',
     number: d.number || d.phoneNumber || d.contactNumber || d.hotlineNumber || d.phone || '',
     category: String(d.category || d.type || 'other').trim().toLowerCase(),
     imageUrl: d.imageUrl || d.logoUrl || d.image || d.logo || null
   };
+};
+
+// Pinapaliit ang data bago i-save sa AsyncStorage para hindi ma-exceed ang 2MB limit ng Android
+const prepareForCache = (list) => {
+  return list.map((item) => ({
+    id: item.id,
+    name: item.name,
+    number: item.number,
+    category: item.category,
+    // Kung regular URL (http/https), i-keep; kung sobrang habang base64 string, i-null para hindi mag-crash ang AsyncStorage
+    imageUrl: item.imageUrl && item.imageUrl.length < 2000 ? item.imageUrl : null
+  }));
 };
 
 const SmartImage = ({ uri }) => {
@@ -68,6 +79,8 @@ export default function DirectoryScreen() {
           const parsedData = JSON.parse(cachedData);
           if (Array.isArray(parsedData) && parsedData.length > 0) {
             setHotlines(parsedData);
+            setLoading(false);
+            console.log('Successfully loaded cached hotlines:', parsedData.length);
           }
         }
       } catch (error) {
@@ -95,15 +108,15 @@ export default function DirectoryScreen() {
           .sort((a, b) => a.name.localeCompare(b.name));
 
         if (!fromCache) {
-          // Kapag online, laging sundin ang server (Add, Edit, o Delete man)
           setHotlines(list);
           try {
-            await AsyncStorage.setItem(HOTLINES_CACHE_KEY, JSON.stringify(list));
+            const safeCacheList = prepareForCache(list);
+            await AsyncStorage.setItem(HOTLINES_CACHE_KEY, JSON.stringify(safeCacheList));
+            console.log('Saved hotlines to local cache:', safeCacheList.length);
           } catch (error) {
             console.error('Error saving hotlines to local cache:', error);
           }
         } else if (list.length > 0) {
-          // Kapag offline, gamitin ang naka-cache na data
           setHotlines(list);
         }
 
