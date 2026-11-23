@@ -21,7 +21,7 @@ const PHILSMS_SENDER_ID = 'PhilSMS';
 
 const EMAILJS_SERVICE_ID = 'service_m6h4fcd';
 const EMAILJS_TEMPLATE_ID = 'template_h170b3d';
-const EMAILJS_PUBLIC_KEY = 'i4-ipzIrmNzC9_sRf';
+const EMAILJS_PUBLIC_KEY = 'CiFGvQir_uGzyUpLM';
 
 const OLONGAPO_BARANGAYS = [
   'Barretto', 'East Bajac-bajac', 'East Tapinac', 'Gordon Heights',
@@ -503,7 +503,7 @@ export default function AuthScreen({ navigation }) {
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Image source={require('../assets/download1.png')} style={styles.logoImage} />
+      <Image source={require('../assets/1010.png')} style={styles.logoImage} />
 
       <Animated.View style={{ width: '100%', alignItems: 'center', opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
         <Text style={styles.welcomeTitle}>{isLogin ? 'Welcome Back' : 'Create Account'}</Text>
