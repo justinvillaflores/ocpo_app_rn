@@ -68,12 +68,12 @@ export default function DirectoryScreen() {
           const parsedData = JSON.parse(cachedData);
           if (Array.isArray(parsedData) && parsedData.length > 0) {
             setHotlines(parsedData);
-            setLoading(false);
-            console.log('Successfully loaded cached hotlines:', parsedData.length);
           }
         }
       } catch (error) {
         console.error('Error loading cached hotlines:', error);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     };
 
@@ -94,17 +94,17 @@ export default function DirectoryScreen() {
           .map(normalize)
           .sort((a, b) => a.name.localeCompare(b.name));
 
-        if (list.length > 0) {
+        if (!fromCache) {
+          // Kapag online, laging sundin ang server (Add, Edit, o Delete man)
           setHotlines(list);
-
-          if (!fromCache) {
-            try {
-              await AsyncStorage.setItem(HOTLINES_CACHE_KEY, JSON.stringify(list));
-              console.log('Updated hotlines local cache with latest server data.');
-            } catch (error) {
-              console.error('Error saving hotlines to local cache:', error);
-            }
+          try {
+            await AsyncStorage.setItem(HOTLINES_CACHE_KEY, JSON.stringify(list));
+          } catch (error) {
+            console.error('Error saving hotlines to local cache:', error);
           }
+        } else if (list.length > 0) {
+          // Kapag offline, gamitin ang naka-cache na data
+          setHotlines(list);
         }
 
         setLoading(false);

@@ -85,12 +85,12 @@ export default function ServicesScreen() {
           const parsedData = JSON.parse(cachedData);
           if (Array.isArray(parsedData) && parsedData.length > 0) {
             setAllData(parsedData);
-            setLoading(false);
-            console.log('Successfully loaded cached services:', parsedData.length);
           }
         }
       } catch (error) {
         console.error('Error loading cached services:', error);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     };
 
@@ -111,17 +111,15 @@ export default function ServicesScreen() {
           .map(normalize)
           .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
 
-        if (list.length > 0) {
+        if (!fromCache) {
           setAllData(list);
-
-          if (!fromCache) {
-            try {
-              await AsyncStorage.setItem(SERVICES_CACHE_KEY, JSON.stringify(list));
-              console.log('Updated services local cache with latest server data.');
-            } catch (error) {
-              console.error('Error saving services to local cache:', error);
-            }
+          try {
+            await AsyncStorage.setItem(SERVICES_CACHE_KEY, JSON.stringify(list));
+          } catch (error) {
+            console.error('Error saving services to local cache:', error);
           }
+        } else if (list.length > 0) {
+          setAllData(list);
         }
 
         setLoading(false);
