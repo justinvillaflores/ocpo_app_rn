@@ -5,7 +5,7 @@ import { db } from '../firebaseConfig';
 import { collection, onSnapshot } from 'firebase/firestore';
 
 const HOTLINES_CACHE_KEY = '@directory_hotlines_cache_v2';
-const DEFAULT_LOGO = require('../assets/OCPO.png');
+const DEFAULT_LOGO = require('../assets/onecall.png');
 
 const styles = {
   page: { flex: 1, paddingHorizontal: 20, paddingTop: 70, backgroundColor: '#fff' },
@@ -40,14 +40,12 @@ const normalize = (doc) => {
   };
 };
 
-// Pinapaliit ang data bago i-save sa AsyncStorage para hindi ma-exceed ang 2MB limit ng Android
 const prepareForCache = (list) => {
   return list.map((item) => ({
     id: item.id,
     name: item.name,
     number: item.number,
     category: item.category,
-    // Kung regular URL (http/https), i-keep; kung sobrang habang base64 string, i-null para hindi mag-crash ang AsyncStorage
     imageUrl: item.imageUrl && item.imageUrl.length < 2000 ? item.imageUrl : null
   }));
 };

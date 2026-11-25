@@ -5,10 +5,11 @@ import {
   LayoutAnimation, Platform, UIManager
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db } from '../firebaseConfig';
 import {
   createUserWithEmailAndPassword, signInWithEmailAndPassword,
-  sendPasswordResetEmail, onAuthStateChanged
+  sendPasswordResetEmail, onAuthStateChanged, fetchSignInMethodsForEmail
 } from 'firebase/auth';
 import { setDoc, doc, collection, query, where, getDocs } from 'firebase/firestore';
 
@@ -22,6 +23,8 @@ const PHILSMS_SENDER_ID = 'PhilSMS';
 const EMAILJS_SERVICE_ID = 'service_nribbxo';
 const EMAILJS_TEMPLATE_ID = 'template_h170b3d';
 const EMAILJS_PUBLIC_KEY = 'CiFGvQir_uGzyUpLM';
+
+const SAVED_CREDENTIALS_KEY = '@onecall_saved_credentials';
 
 const OLONGAPO_BARANGAYS = [
   'Barretto', 'East Bajac-bajac', 'East Tapinac', 'Gordon Heights',
@@ -58,6 +61,7 @@ export default function AuthScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [stayLoggedIn, setStayLoggedIn] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [showAddressModal, setShowAddressModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -82,6 +86,39 @@ export default function AuthScreen({ navigation }) {
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loadSavedCredentials = async () => {
+      try {
+        const savedData = await AsyncStorage.getItem(SAVED_CREDENTIALS_KEY);
+        if (savedData) {
+          const parsed = JSON.parse(savedData);
+          if (parsed.stayLoggedIn) {
+            setEmail(parsed.email || '');
+            setPassword(parsed.password || '');
+            setStayLoggedIn(true);
+          }
+        }
+      } catch (error) {
+        console.log('Failed to load saved credentials:', error.message);
+      }
+    };
+
+    loadSavedCredentials();
+  }, []);
+
+  const handleToggleStayLoggedIn = async () => {
+    const nextValue = !stayLoggedIn;
+    setStayLoggedIn(nextValue);
+
+    if (!nextValue) {
+      try {
+        await AsyncStorage.removeItem(SAVED_CREDENTIALS_KEY);
+      } catch (error) {
+        console.log('Failed to clear saved credentials:', error.message);
+      }
+    }
+  };
 
   const toggleAuthMode = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -154,6 +191,54 @@ export default function AuthScreen({ navigation }) {
     return text.trim().replace(/\s+/g, ' ').toLowerCase();
   };
 
+  const checkEmailExists = async targetEmail => {
+    try {
+      const normalizedEmail = targetEmail.trim().toLowerCase();
+      const usersRef = collection(db, 'users');
+
+      const qExact = query(usersRef, where('email', '==', targetEmail.trim()));
+      const exactSnapshot = await getDocs(qExact);
+      if (!exactSnapshot.empty) {
+        return true;
+      }
+
+      const qLower = query(usersRef, where('email', '==', normalizedEmail));
+      const lowerSnapshot = await getDocs(qLower);
+      if (!lowerSnapshot.empty) {
+        return true;
+      }
+
+      const allUsersSnapshot = await getDocs(usersRef);
+      let duplicateFound = false;
+
+      allUsersSnapshot.forEach(docSnap => {
+        const data = docSnap.data();
+        const existingEmail = (data.email || '').trim().toLowerCase();
+        if (existingEmail && existingEmail === normalizedEmail) {
+          duplicateFound = true;
+        }
+      });
+
+      if (duplicateFound) {
+        return true;
+      }
+
+      try {
+        const signInMethods = await fetchSignInMethodsForEmail(auth, normalizedEmail);
+        if (signInMethods && signInMethods.length > 0) {
+          return true;
+        }
+      } catch (authCheckErr) {
+        console.log('Auth sign-in methods check warning:', authCheckErr.message);
+      }
+
+      return false;
+    } catch (error) {
+      console.log('Firestore email check warning:', error.message);
+      throw new Error('Unable to verify the email address right now. Please try again.');
+    }
+  };
+
   const checkPhoneNumberExists = async formattedPhone => {
     try {
       const usersRef = collection(db, 'users');
@@ -222,6 +307,19 @@ export default function AuthScreen({ navigation }) {
       setLoading(true);
       try {
         await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPassword);
+
+        if (stayLoggedIn) {
+          await AsyncStorage.setItem(
+            SAVED_CREDENTIALS_KEY,
+            JSON.stringify({
+              email: trimmedEmail,
+              password: trimmedPassword,
+              stayLoggedIn: true
+            })
+          );
+        } else {
+          await AsyncStorage.removeItem(SAVED_CREDENTIALS_KEY);
+        }
       } catch (error) {
         Alert.alert('Authentication Error', error.message);
       } finally {
@@ -271,6 +369,17 @@ export default function AuthScreen({ navigation }) {
           return Alert.alert(
             'Already Registered',
             'This mobile number is already taken by another account.'
+          );
+        }
+
+        const emailExists = await checkEmailExists(trimmedEmail);
+
+        if (emailExists) {
+          setLoading(false);
+          setIsRegistering(false);
+          return Alert.alert(
+            'Email Already Registered',
+            'This email address is already registered to another account. Please use a different email address.'
           );
         }
 
@@ -408,7 +517,7 @@ export default function AuthScreen({ navigation }) {
 
       const userCredential = await createUserWithEmailAndPassword(
         auth,
-        email.trim(),
+        email.trim().toLowerCase(),
         password.trim()
       );
 
@@ -434,7 +543,7 @@ export default function AuthScreen({ navigation }) {
         isPhoneVerified: otpChannel === 'sms',
         isEmailVerified: otpChannel === 'email',
         verificationMethod: otpChannel,
-        email: email.trim(),
+        email: email.trim().toLowerCase(),
         role: 'citizen',
         privacyConsent: true,
         privacyConsentVersion: '1.0',
@@ -503,7 +612,7 @@ export default function AuthScreen({ navigation }) {
 
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-      <Image source={require('../assets/1010.png')} style={styles.logoImage} />
+      <Image source={require('../assets/onecall.png')} style={styles.logoImage} />
 
       <Animated.View style={{ width: '100%', alignItems: 'center', opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
         <Text style={styles.welcomeTitle}>{isLogin ? 'Welcome Back' : 'Create Account'}</Text>
@@ -593,7 +702,19 @@ export default function AuthScreen({ navigation }) {
 
           {isLogin && (
             <View style={styles.optionsContainer}>
-              <Text style={styles.rememberText}>Stay logged in</Text>
+              <TouchableOpacity
+                style={styles.rememberRow}
+                onPress={handleToggleStayLoggedIn}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: stayLoggedIn }}
+              >
+                <Ionicons
+                  name={stayLoggedIn ? 'checkbox' : 'square-outline'}
+                  size={20}
+                  color="#003399"
+                />
+                <Text style={styles.rememberText}>Stay logged in</Text>
+              </TouchableOpacity>
               <TouchableOpacity onPress={handleForgotPassword}>
                 <Text style={styles.forgotText}>Forgot Password?</Text>
               </TouchableOpacity>
@@ -734,6 +855,7 @@ const styles = StyleSheet.create({
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#E8F5E9', borderRadius: 12, paddingHorizontal: 15, marginBottom: 15, height: 55 },
   input: { flex: 1, marginLeft: 10, fontSize: 15 },
   optionsContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, paddingHorizontal: 5 },
+  rememberRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   rememberText: { fontSize: 13, color: '#666' },
   forgotText: { fontSize: 13, color: '#0047AB', fontWeight: 'bold' },
   mainButton: { backgroundColor: '#0047AB', borderRadius: 25, minHeight: 55, justifyContent: 'center', alignItems: 'center', marginTop: 10, paddingHorizontal: 14 },

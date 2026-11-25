@@ -7,7 +7,7 @@ import { collection, onSnapshot, addDoc, serverTimestamp } from 'firebase/firest
 
 const SERVICES_CACHE_KEY = '@services_hotlines_cache_v2';
 const QUEUE_KEY = '@offline_feedback_queue';
-const DEFAULT_LOGO = require('../assets/pnp.png');
+const DEFAULT_LOGO = require('../assets/onecall.png');
 
 const normalize = (doc) => {
   const d = doc.data();
